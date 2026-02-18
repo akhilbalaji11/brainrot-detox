@@ -1,0 +1,246 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Patrick Hand', cursive;
+    background: #d4c9a8;
+    color: #3a2e1e;
+    min-height: 100vh;
+    /* Lined paper */
+    background-image: repeating-linear-gradient(to bottom,
+            transparent,
+            transparent 27px,
+            #b8c8d8 27px,
+            #b8c8d8 28px);
+    background-position: 0 60px;
+}
+
+.container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 24px;
+}
+
+.header {
+    background: #fdf8ee;
+    border: 3px solid #3a2e1e;
+    border-radius: 6px;
+    padding: 20px 24px;
+    box-shadow: 5px 5px 0 #3a2e1e;
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #3a2e1e;
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: #c0392b;
+    text-underline-offset: 3px;
+}
+
+.icon {
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+}
+
+.subtitle {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 13px;
+    color: #7a6a50;
+    margin-top: 4px;
+}
+
+.tabs {
+    display: flex;
+    gap: 6px;
+    margin: 0 0 16px;
+    flex-wrap: wrap;
+}
+
+.tab {
+    background: #fdf8ee;
+    border: 2px solid #c8b89a;
+    color: #7a6a50;
+    font-family: 'Caveat', cursive;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #c8b89a;
+    transition: all 0.1s ease;
+}
+
+.tab:hover {
+    color: #3a2e1e;
+    border-color: #3a2e1e;
+    box-shadow: 2px 2px 0 #3a2e1e;
+    transform: translate(-1px, -1px);
+}
+
+.tab.active {
+    background: #e8d5f5;
+    color: #7b2d8b;
+    border-color: #7b2d8b;
+    box-shadow: 2px 2px 0 #7b2d8b;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+.setting,
+.feature {
+    padding: 16px;
+    background: #fdf8ee;
+    border: 2px solid #c8b89a;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    box-shadow: 2px 2px 0 #c8b89a;
+    background-image: repeating-linear-gradient(to bottom,
+            transparent,
+            transparent 27px,
+            #e0d8c0 27px,
+            #e0d8c0 28px);
+    background-position: 0 8px;
+}
+
+.feature-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.feature-header h3 {
+    font-family: 'Caveat', cursive;
+    font-size: 17px;
+    font-weight: 700;
+    color: #3a2e1e;
+}
+
+.feature-header input {
+    width: 16px;
+    height: 16px;
+    accent-color: #7b2d8b;
+}
+
+.setting label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Patrick Hand', cursive;
+    font-size: 14px;
+    cursor: pointer;
+    color: #3a2e1e;
+}
+
+.setting input[type="checkbox"] {
+    accent-color: #7b2d8b;
+    width: 16px;
+    height: 16px;
+}
+
+.desc {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 12px;
+    color: #7a6a50;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+.range-label {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 12px;
+    color: #7a6a50;
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+}
+
+input[type="range"] {
+    width: 100%;
+    margin-top: 4px;
+    accent-color: #7b2d8b;
+}
+
+.btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 2px solid #3a2e1e;
+    background: #fdf8ee;
+    color: #3a2e1e;
+    font-family: 'Caveat', cursive;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #3a2e1e;
+    transition: all 0.1s ease;
+}
+
+.btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #3a2e1e;
+}
+
+.btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+}
+
+.btn.primary {
+    background: #e8d5f5;
+    border-color: #7b2d8b;
+    color: #7b2d8b;
+    box-shadow: 2px 2px 0 #7b2d8b;
+}
+
+.btn.primary:hover {
+    box-shadow: 3px 3px 0 #7b2d8b;
+}
+
+.btn.danger {
+    background: #fdecea;
+    color: #c0392b;
+    border-color: #c0392b;
+    box-shadow: 2px 2px 0 #c0392b;
+}
+
+.btn.danger:hover {
+    box-shadow: 3px 3px 0 #c0392b;
+}
+
+.footer {
+    margin-top: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.save-msg {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 13px;
+    color: #2e7d32;
+    font-style: italic;
+}

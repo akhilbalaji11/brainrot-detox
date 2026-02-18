@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brainrot Detox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap"
+    rel="stylesheet">
+  <script type="module" crossorigin src="../../popup.js"></script>
+  <link rel="modulepreload" crossorigin href="../../chunks/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="../../chunks/constants-CPIsdmbZ.js">
+  <link rel="stylesheet" crossorigin href="../../assets/popup.css">
+</head>
+
+<body>
+  <div class="notebook">
+
+    <!-- Spiral binding holes -->
+    <div class="spiral">
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+    </div>
+
+    <div class="page">
+
+      <!-- Header -->
+      <div class="nb-header">
+        <div class="nb-title-wrap">
+          <span class="nb-logo">[B]</span>
+          <span class="nb-title">Brainrot Detox</span>
+        </div>
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot"></span>
+          <span class="status-text">Active</span>
+        </div>
+      </div>
+
+      <div class="nb-divider"></div>
+
+      <!-- Score section -->
+      <div class="score-section">
+        <div class="score-ring" id="scoreRing">
+          <svg viewBox="0 0 120 120" class="ring-svg">
+            <circle cx="60" cy="60" r="52" class="ring-bg" />
+            <circle cx="60" cy="60" r="52" class="ring-fill" id="ringFill" />
+          </svg>
+          <div class="score-inner">
+            <span class="score-emoji" id="scoreEmoji">( ._.) </span>
+            <span class="score-number" id="scoreNumber">0</span>
+          </div>
+        </div>
+        <div class="score-label" id="scoreLabel">Based</div>
+        <div class="score-hint" id="scoreHint">Keep it chill, you're doing great.</div>
+      </div>
+
+      <div class="nb-divider dashed"></div>
+
+      <!-- Quick Actions -->
+      <div class="nb-section-label">-- quick actions --</div>
+      <div class="actions">
+        <button class="action-btn primary" id="btnPack">
+          <span class="btn-icon">[#]</span>
+          <span class="btn-label">Start Pack</span>
+        </button>
+        <button class="action-btn success" id="btnGrass">
+          <span class="btn-icon">[*]</span>
+          <span class="btn-label">Touch Grass</span>
+        </button>
+        <button class="action-btn ghost" id="btnVibe">
+          <span class="btn-icon">[?]</span>
+          <span class="btn-label">Vibe Check</span>
+        </button>
+      </div>
+
+      <!-- Pack Selector (hidden by default) -->
+      <div class="pack-menu hidden" id="packMenu">
+        <div class="pack-title">choose your pack:</div>
+        <div class="pack-grid">
+          <button class="pack-opt" data-mode="items" data-value="5">5 Items</button>
+          <button class="pack-opt" data-mode="items" data-value="10">10 Items</button>
+          <button class="pack-opt" data-mode="items" data-value="20">20 Items</button>
+          <button class="pack-opt" data-mode="time" data-value="5">5 Min</button>
+          <button class="pack-opt" data-mode="time" data-value="10">10 Min</button>
+          <button class="pack-opt" data-mode="time" data-value="20">20 Min</button>
+        </div>
+      </div>
+
+      <div class="nb-divider dashed"></div>
+
+      <!-- Current site -->
+      <div class="site-row">
+        <span class="site-name" id="siteName">Not on a supported site</span>
+        <label class="toggle">
+          <input type="checkbox" id="siteToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="nb-divider dashed"></div>
+
+      <!-- Brainrot Notes -->
+      <div class="nb-section-label">-- brainrot notes --</div>
+      <div class="notes-section">
+        <textarea id="brainrotNotes" class="notes-area" placeholder="write something... anything..." maxlength="2000"
+          spellcheck="false"></textarea>
+        <div class="notes-actions">
+          <span class="notes-count" id="notesCount">0 / 2000</span>
+          <button class="notes-btn" id="btnSaveNotes">save</button>
+          <button class="notes-btn download" id="btnDownloadNotes">download .txt</button>
+        </div>
+      </div>
+
+      <div class="nb-divider"></div>
+
+      <!-- Footer links -->
+      <div class="footer">
+        <a href="#" class="footer-link" id="linkOptions">[=] options</a>
+        <a href="#" class="footer-link" id="linkDashboard">[~] dashboard</a>
+      </div>
+
+    </div><!-- /page -->
+  </div><!-- /notebook -->
+
+</body>
+
+</html>

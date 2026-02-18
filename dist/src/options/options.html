@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brainrot Detox — Options</title>
+  <script type="module" crossorigin src="../../options.js"></script>
+  <link rel="modulepreload" crossorigin href="../../chunks/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="../../assets/options.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><span class="icon">[B]</span> Brainrot Detox</h1>
+            <p class="subtitle">Your friendly anti-doomscroll companion</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="general">General</button>
+            <button class="tab" data-tab="features">Features</button>
+            <button class="tab" data-tab="sites">Sites</button>
+            <button class="tab" data-tab="data">Data</button>
+        </nav>
+
+        <main class="content">
+            <!-- General -->
+            <section class="tab-panel active" id="panel-general">
+                <div class="setting">
+                    <label><input type="checkbox" id="masterEnabled" checked> <strong>Enable Brainrot
+                            Detox</strong></label>
+                    <p class="desc">Global on/off switch</p>
+                </div>
+            </section>
+
+            <!-- Features -->
+            <section class="tab-panel" id="panel-features">
+                <div class="feature">
+                    <div class="feature-header"><input type="checkbox" id="feat-cookedMeter" checked>
+                        <h3>[%] Cooked Meter</h3>
+                    </div>
+                    <p class="desc">Track doomscroll level with live score</p>
+                    <label class="range-label">Intervention threshold <span id="val-threshold">80</span></label>
+                    <input type="range" id="threshold" min="50" max="100" value="80">
+                </div>
+                <div class="feature">
+                    <div class="feature-header"><input type="checkbox" id="feat-snackPacks" checked>
+                        <h3>[#] Snack Packs</h3>
+                    </div>
+                    <p class="desc">Finite scroll sessions</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-header"><input type="checkbox" id="feat-touchGrass" checked>
+                        <h3>[*] Touch Grass</h3>
+                    </div>
+                    <p class="desc">Temporary feed lock</p>
+                    <label class="range-label">Default duration (min) <span id="val-grassMin">5</span></label>
+                    <input type="range" id="grassMin" min="1" max="30" value="5">
+                </div>
+                <div class="feature">
+                    <div class="feature-header"><input type="checkbox" id="feat-vibeCheck" checked>
+                        <h3>[?] Vibe Check</h3>
+                    </div>
+                    <p class="desc">Intentionality prompts</p>
+                    <label class="range-label">Interval (min) <span id="val-vibeInt">15</span></label>
+                    <input type="range" id="vibeInt" min="5" max="60" value="15">
+                </div>
+            </section>
+
+            <!-- Sites -->
+            <section class="tab-panel" id="panel-sites">
+                <div class="setting"><label><input type="checkbox" data-site="youtube" checked> YouTube</label></div>
+                <div class="setting"><label><input type="checkbox" data-site="shorts" checked> YouTube Shorts</label>
+                </div>
+                <div class="setting"><label><input type="checkbox" data-site="reddit" checked> Reddit</label></div>
+            </section>
+
+            <!-- Data -->
+            <section class="tab-panel" id="panel-data">
+                <p class="desc">All data is stored locally. Nothing leaves your device.</p>
+                <div class="btn-row">
+                    <button class="btn" id="btnExport">[^] Export</button>
+                    <button class="btn" id="btnImport">[v] Import</button>
+                    <button class="btn danger" id="btnClear">[x] Clear All</button>
+                </div>
+                <input type="file" id="importFile" accept=".json" hidden>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <button class="btn primary" id="btnSave">Save Changes</button>
+            <span class="save-msg" id="saveMsg"></span>
+        </footer>
+    </div>
+</body>
+
+</html>

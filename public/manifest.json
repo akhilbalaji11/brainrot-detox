@@ -1,0 +1,72 @@
+{
+    "manifest_version": 3,
+    "name": "Brainrot Detox",
+    "version": "1.0.0",
+    "description": "Your brain on infinite scroll is cooked. We're the detox.",
+    "permissions": [
+        "storage",
+        "alarms",
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://www.youtube.com/*",
+        "https://www.reddit.com/*"
+    ],
+    "background": {
+        "service_worker": "service-worker.js",
+        "type": "module"
+    },
+    "action": {
+        "default_popup": "src/popup/popup.html",
+        "default_title": "Brainrot Detox"
+    },
+    "options_page": "src/options/options.html",
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.youtube.com/shorts/*"
+            ],
+            "js": [
+                "inject-shorts.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://www.youtube.com/*"
+            ],
+            "exclude_matches": [
+                "https://www.youtube.com/shorts/*"
+            ],
+            "js": [
+                "inject-youtube.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://www.reddit.com/*"
+            ],
+            "js": [
+                "inject-reddit.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/*"
+            ],
+            "matches": [
+                "https://www.youtube.com/*",
+                "https://www.reddit.com/*"
+            ]
+        }
+    ]
+}

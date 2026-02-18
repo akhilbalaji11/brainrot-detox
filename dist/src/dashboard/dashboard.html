@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brainrot Detox — Dashboard</title>
+  <script type="module" crossorigin src="../../dashboard.js"></script>
+  <link rel="modulepreload" crossorigin href="../../chunks/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="../../assets/dashboard.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><span>[~]</span> Dashboard</h1>
+            <p class="subtitle">Your digital wellness insights — all local, all private</p>
+        </header>
+
+        <!-- Summary Cards -->
+        <div class="cards">
+            <div class="card">
+                <div class="card-icon">[#]</div>
+                <div class="card-val" id="statPacks">0</div>
+                <div class="card-label">Packs Done</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">[*]</div>
+                <div class="card-val" id="statGrass">0</div>
+                <div class="card-label">Touch Grass</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">[!]</div>
+                <div class="card-val" id="statInterventions">0</div>
+                <div class="card-label">Interventions</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">[?]</div>
+                <div class="card-val" id="statVibes">0</div>
+                <div class="card-label">Vibe Checks</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">[+]</div>
+                <div class="card-val" id="statBypasses">0</div>
+                <div class="card-label">Bypasses</div>
+            </div>
+        </div>
+
+        <!-- Share Card -->
+        <section class="share-section">
+            <h2>[~] Weekly Recap</h2>
+            <div class="share-card" id="shareCard">
+                <div class="share-header"><span>[B]</span> My Brainrot Detox Week</div>
+                <div class="share-stats">
+                    <div><span class="share-num" id="sharePacks">0</span> Packs</div>
+                    <div><span class="share-num" id="shareGrass">0</span> Touch Grass</div>
+                    <div><span class="share-num" id="shareInterventions">0</span> Interventions</div>
+                </div>
+                <div class="share-footer">no cap, I'm getting better</div>
+            </div>
+            <button class="btn" id="btnCopy">[c] Copy Recap</button>
+        </section>
+
+        <footer class="footer">
+            <p>All data stored locally. <a href="#" id="linkOptions">Manage Settings</a></p>
+        </footer>
+    </div>
+</body>
+
+</html>
