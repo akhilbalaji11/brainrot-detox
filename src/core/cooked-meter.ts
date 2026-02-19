@@ -127,6 +127,29 @@ export function computeTikTokCookedScore(
     return Math.max(0, Math.round(newScore - 3));
 }
 
+/* ── Instagram Reels cooked score (swipes only, same as Shorts) ─── */
+
+export function computeReelsCookedScore(
+    previousScore: number,
+    swipes: number,
+    vibeIntent: VibeIntent,
+    idleMs: number
+): number {
+    if (swipes > 0) {
+        return Math.max(0, Math.min(100, previousScore + swipes));
+    }
+
+    // Idle decay with vibe-based threshold
+    const decayThreshold =
+        vibeIntent === "Chill" || vibeIntent === "Laugh" ? 15000 :
+            vibeIntent === "Learn" || vibeIntent === "JustHere" ? 25000 :
+                20000;
+
+    if (idleMs < decayThreshold) return previousScore;
+    if (idleMs < 60000) return Math.max(0, previousScore - 1);
+    return Math.max(0, previousScore - 3);
+}
+
 /* ── Late-night check ─────────────────────────────────── */
 
 export function isLateNight(
