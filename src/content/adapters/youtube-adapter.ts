@@ -109,5 +109,12 @@ export class YouTubeAdapter extends BaseAdapter {
         w.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
     }
 
+    protected showBuiltDifferentDeniedOverlay(): void {
+        const w = showOverlay("denied", `<div class="brd-fullscreen"><div class="brd-card"><h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2><p style="text-align:center;">You thought you could just scroll away? Pick one.</p><div class="brd-btn-row" style="justify-content:center;"><button class="brd-btn brd-btn-success" data-action="grass">🌿 Touch Grass (5 min)</button><button class="brd-btn brd-btn-primary" data-action="pack">🍱 Start Pack</button><button class="brd-btn brd-btn-ghost" data-action="vibe">✨ Vibe Check</button></div></div></div>`);
+        w.querySelector("[data-action='grass']")?.addEventListener("click", () => { removeOverlay("denied"); this.startTouchGrass(5); });
+        w.querySelector("[data-action='pack']")?.addEventListener("click", () => { removeOverlay("denied"); this.startPack("items", 10); });
+        w.querySelector("[data-action='vibe']")?.addEventListener("click", () => { removeOverlay("denied"); this.showVibeCheckOverlay(); });
+    }
+
     protected removeAllOverlays(): void { removeAll(); }
 }

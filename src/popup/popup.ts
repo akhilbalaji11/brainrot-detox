@@ -6,7 +6,7 @@ const scoreEmoji = document.getElementById("scoreEmoji")!;
 const scoreNumber = document.getElementById("scoreNumber")!;
 const scoreLabel = document.getElementById("scoreLabel")!;
 const scoreHint = document.getElementById("scoreHint")!;
-const ringFill = document.getElementById("ringFill") as SVGCircleElement;
+const ringFill = document.getElementById("ringFill") as SVGCircleElement | null;
 const statusPill = document.getElementById("statusPill")!;
 const siteName = document.getElementById("siteName")!;
 const siteToggle = document.getElementById("siteToggle") as HTMLInputElement;
@@ -94,17 +94,19 @@ function updateScore(session: SessionState) {
     scoreHint.textContent = label.hint;
 
     // Ring animation (circumference = 2π * 52 ≈ 326.7)
-    const circumference = 326.7;
-    const offset = circumference - (score / 100) * circumference;
-    ringFill.style.strokeDashoffset = String(offset);
+    if (ringFill) {
+        const circumference = 326.7;
+        const offset = circumference - (score / 100) * circumference;
+        ringFill.style.strokeDashoffset = String(offset);
 
-    // Color the ring based on status (warm tones for light/notebook mode)
-    const colors: Record<string, string> = {
-        "Based": "#2e7d32",
-        "Medium Cooked": "#e65100",
-        "Absolutely Cooked": "#c0392b",
-    };
-    ringFill.style.stroke = colors[status] || "#7b2d8b";
+        // Color the ring based on status (warm tones for light/notebook mode)
+        const colors: Record<string, string> = {
+            "Based": "#2e7d32",
+            "Medium Cooked": "#e65100",
+            "Absolutely Cooked": "#c0392b",
+        };
+        ringFill.style.stroke = colors[status] || "#7b2d8b";
+    }
 }
 
 /* ── Listeners ────────────────────────────────────────── */
