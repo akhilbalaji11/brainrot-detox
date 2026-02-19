@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
         youtube: { ...SITE_DEFAULTS },
         shorts: { ...SITE_DEFAULTS },
         reddit: { ...SITE_DEFAULTS },
+        "instagram-reels": { ...SITE_DEFAULTS },
+        "tiktok": { ...SITE_DEFAULTS },
     },
     cooked: {
         thresholds: DEFAULT_THRESHOLDS,
@@ -83,6 +85,8 @@ export const DEFAULT_STATS: StatsState = {
         youtube: { ...SITE_STATS_DEFAULTS },
         shorts: { ...SITE_STATS_DEFAULTS },
         reddit: { ...SITE_STATS_DEFAULTS },
+        "instagram-reels": { ...SITE_STATS_DEFAULTS },
+        "tiktok": { ...SITE_STATS_DEFAULTS },
     },
     weeklyScores: [],
 };
