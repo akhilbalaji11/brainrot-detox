@@ -15,10 +15,10 @@ export abstract class BaseAdapter {
     protected session!: SessionState;
     protected enabled = false;
     private tickTimer: number | null = null;
-    private lastSignalAt = 0;
+    protected lastSignalAt = 0;
     protected scrollCount = 0;
     protected swipeCount = 0;
-    private maxCookedShown = false;
+    protected maxCookedShown = false;
     protected builtDifferentDismissed = false;
 
     /* ── Lifecycle ────────────────────────────────────────── */
@@ -97,7 +97,7 @@ export abstract class BaseAdapter {
 
     /* ── Tick loop ──────────────────────────────────────── */
 
-    private async tick() {
+    protected async tick() {
         if (!this.enabled) return;
 
         const now = Date.now();

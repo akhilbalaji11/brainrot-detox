@@ -1,6 +1,7 @@
 import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
-import { computeTikTokCookedScore, getCookedLabel } from "@/core/cooked-meter";
-import { getPackProgress } from "@/core/snack-packs";
+import { computeTikTokCookedScore, deriveCookedStatus, getCookedLabel, isMaxCooked, shouldIntervene } from "@/core/cooked-meter";
+import { sendMessage } from "@/core/messaging";
+import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
 import type { CookedStatus, VibeIntent } from "@/core/types";
 import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
@@ -16,7 +17,6 @@ export class TikTokAdapter extends BaseAdapter {
     private lastVideoId = "";
     private videoObserver: MutationObserver | null = null;
     private currentVideo: HTMLVideoElement | null = null;
-    private videoWatchStart = 0;
 
     /* -- Video helpers ------------------------------------ */
 
@@ -162,8 +162,6 @@ export class TikTokAdapter extends BaseAdapter {
     }
 
     /* -- Override tick for TikTok-specific scoring --------- */
-
-    private lastWatchTime = 0;
 
     protected getWatchTimeSinceLastTick(): number {
         const ms = this.watchTimeSinceLastTick;
@@ -459,6 +457,82 @@ export class TikTokAdapter extends BaseAdapter {
         wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => {
             removeOverlay("vibecheck");
         });
+    }
+
+    /* ── Override tick for TikTok-specific scoring ──────── */
+
+    protected async tick() {
+        if (!this.enabled) return;
+
+        const now = Date.now();
+        const newItems = this.getNewItemsSinceLastTick();
+        this.session.itemsConsumed += newItems;
+        this.session.scrollEvents += this.scrollCount;
+
+        const hasNewSignals = this.scrollCount > 0 || newItems > 0 || this.swipeCount > 0;
+        if (hasNewSignals) this.lastSignalAt = now;
+        const idleMs = this.lastSignalAt === 0 ? 0 : now - this.lastSignalAt;
+
+        // Handle "Built Different" dismissal
+        if (this.builtDifferentDismissed && hasNewSignals) {
+            this.builtDifferentDismissed = false;
+            this.scrollCount = 0;
+            this.swipeCount = 0;
+            this.onBuiltDifferentDenied();
+            return;
+        }
+
+        // Get watch time for this tick
+        const watchTimeMs = this.getWatchTimeSinceLastTick();
+
+        // Compute score using TikTok-specific formula
+        let newScore: number;
+        if (this.session.packState.active) {
+            newScore = this.session.cookedScore; // frozen during pack
+        } else {
+            newScore = computeTikTokCookedScore(
+                this.session.cookedScore,
+                watchTimeMs,
+                this.swipeCount,
+                this.session.vibeIntent,
+                idleMs
+            );
+        }
+
+        // Reset per-tick counters
+        this.scrollCount = 0;
+        this.swipeCount = 0;
+
+        this.session.cookedScore = newScore;
+        this.session.cookedStatus = deriveCookedStatus(newScore, this.settings.cooked.thresholds);
+
+        // Pack progress check
+        if (this.session.packState.active) {
+            this.session.packState = incrementPack(this.session.packState, newItems);
+            if (isPackComplete(this.session.packState, now)) {
+                this.onPackComplete();
+            }
+        }
+
+        // Intervention check
+        if (!this.session.packState.active) {
+            if (isMaxCooked(newScore)) {
+                if (!this.maxCookedShown) {
+                    this.maxCookedShown = true;
+                    this.onMaxCooked();
+                }
+            } else {
+                if (newScore < 95) this.maxCookedShown = false;
+                const scoreRising = newScore >= this.session.cookedScore;
+                if (scoreRising && shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)) {
+                    this.session.lastInterventionAt = now;
+                    this.onIntervention();
+                }
+            }
+        }
+
+        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
+        await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: this.session } });
     }
 
     /* -- Cleanup ------------------------------------------ */
