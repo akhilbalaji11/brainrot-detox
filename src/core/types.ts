@@ -1,5 +1,5 @@
 /* ── Site keys ─────────────────────────────────────────── */
-export type SiteKey = "youtube" | "shorts" | "reddit";
+export type SiteKey = "youtube" | "shorts" | "reddit" | "instagram-reels" | "tiktok";
 
 /* ── Cooked Meter ─────────────────────────────────────── */
 export type CookedStatus = "Based" | "Medium Cooked" | "Absolutely Cooked";
