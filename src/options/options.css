@@ -1,5 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap');
 
+:root {
+    --bg: #d4c9a8;
+    --page: #fdf8ee;
+    --ink: #3a2e1e;
+    --secondary-ink: #7a6a50;
+    --accent-red: #c0392b;
+    --accent-purple: #7b2d8b;
+    --accent-green: #2e7d32;
+    --line-color: #b8c8d8;
+    --card-line-color: #e0d8c0;
+    --border-muted: #c8b89a;
+    --shadow-color: #3a2e1e;
+}
+
+:root[data-theme="dark"] {
+    --bg: #1a1a1a;
+    --page: #2d2d2d;
+    --ink: #e8e0d0;
+    --secondary-ink: #a09080;
+    --accent-red: #e74c3c;
+    --accent-purple: #a855f7;
+    --accent-green: #4ade80;
+    --line-color: #404040;
+    --card-line-color: #383838;
+    --border-muted: #505050;
+    --shadow-color: #000000;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -8,15 +36,15 @@
 
 body {
     font-family: 'Patrick Hand', cursive;
-    background: #d4c9a8;
-    color: #3a2e1e;
+    background: var(--bg);
+    color: var(--ink);
     min-height: 100vh;
     /* Lined paper */
     background-image: repeating-linear-gradient(to bottom,
             transparent,
             transparent 27px,
-            #b8c8d8 27px,
-            #b8c8d8 28px);
+            var(--line-color) 27px,
+            var(--line-color) 28px);
     background-position: 0 60px;
 }
 
@@ -27,11 +55,11 @@ body {
 }
 
 .header {
-    background: #fdf8ee;
-    border: 3px solid #3a2e1e;
+    background: var(--page);
+    border: 3px solid var(--ink);
     border-radius: 6px;
     padding: 20px 24px;
-    box-shadow: 5px 5px 0 #3a2e1e;
+    box-shadow: 5px 5px 0 var(--shadow-color);
     margin-bottom: 24px;
 }
 
@@ -42,10 +70,10 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #3a2e1e;
+    color: var(--ink);
     text-decoration: underline;
     text-decoration-style: wavy;
-    text-decoration-color: #c0392b;
+    text-decoration-color: var(--accent-red);
     text-underline-offset: 3px;
 }
 
@@ -57,7 +85,7 @@ body {
 .subtitle {
     font-family: 'Patrick Hand', cursive;
     font-size: 13px;
-    color: #7a6a50;
+    color: var(--secondary-ink);
     margin-top: 4px;
 }
 
@@ -69,31 +97,31 @@ body {
 }
 
 .tab {
-    background: #fdf8ee;
-    border: 2px solid #c8b89a;
-    color: #7a6a50;
+    background: var(--page);
+    border: 2px solid var(--border-muted);
+    color: var(--secondary-ink);
     font-family: 'Caveat', cursive;
     font-size: 15px;
     font-weight: 600;
     padding: 6px 16px;
     border-radius: 4px;
     cursor: pointer;
-    box-shadow: 2px 2px 0 #c8b89a;
+    box-shadow: 2px 2px 0 var(--border-muted);
     transition: all 0.1s ease;
 }
 
 .tab:hover {
-    color: #3a2e1e;
-    border-color: #3a2e1e;
-    box-shadow: 2px 2px 0 #3a2e1e;
+    color: var(--ink);
+    border-color: var(--ink);
+    box-shadow: 2px 2px 0 var(--shadow-color);
     transform: translate(-1px, -1px);
 }
 
 .tab.active {
     background: #e8d5f5;
-    color: #7b2d8b;
-    border-color: #7b2d8b;
-    box-shadow: 2px 2px 0 #7b2d8b;
+    color: var(--accent-purple);
+    border-color: var(--accent-purple);
+    box-shadow: 2px 2px 0 var(--accent-purple);
 }
 
 .tab-panel {
@@ -107,16 +135,16 @@ body {
 .setting,
 .feature {
     padding: 16px;
-    background: #fdf8ee;
-    border: 2px solid #c8b89a;
+    background: var(--page);
+    border: 2px solid var(--border-muted);
     border-radius: 5px;
     margin-bottom: 10px;
-    box-shadow: 2px 2px 0 #c8b89a;
+    box-shadow: 2px 2px 0 var(--border-muted);
     background-image: repeating-linear-gradient(to bottom,
             transparent,
             transparent 27px,
-            #e0d8c0 27px,
-            #e0d8c0 28px);
+            var(--card-line-color) 27px,
+            var(--card-line-color) 28px);
     background-position: 0 8px;
 }
 
@@ -130,13 +158,13 @@ body {
     font-family: 'Caveat', cursive;
     font-size: 17px;
     font-weight: 700;
-    color: #3a2e1e;
+    color: var(--ink);
 }
 
 .feature-header input {
     width: 16px;
     height: 16px;
-    accent-color: #7b2d8b;
+    accent-color: var(--accent-purple);
 }
 
 .setting label {
@@ -146,11 +174,11 @@ body {
     font-family: 'Patrick Hand', cursive;
     font-size: 14px;
     cursor: pointer;
-    color: #3a2e1e;
+    color: var(--ink);
 }
 
 .setting input[type="checkbox"] {
-    accent-color: #7b2d8b;
+    accent-color: var(--accent-purple);
     width: 16px;
     height: 16px;
 }
@@ -158,7 +186,7 @@ body {
 .desc {
     font-family: 'Patrick Hand', cursive;
     font-size: 12px;
-    color: #7a6a50;
+    color: var(--secondary-ink);
     margin-top: 4px;
     font-style: italic;
 }
@@ -166,7 +194,7 @@ body {
 .range-label {
     font-family: 'Patrick Hand', cursive;
     font-size: 12px;
-    color: #7a6a50;
+    color: var(--secondary-ink);
     margin-top: 10px;
     display: flex;
     justify-content: space-between;
@@ -175,7 +203,7 @@ body {
 input[type="range"] {
     width: 100%;
     margin-top: 4px;
-    accent-color: #7b2d8b;
+    accent-color: var(--accent-purple);
 }
 
 .btn-row {
@@ -188,20 +216,20 @@ input[type="range"] {
 .btn {
     padding: 8px 16px;
     border-radius: 4px;
-    border: 2px solid #3a2e1e;
-    background: #fdf8ee;
-    color: #3a2e1e;
+    border: 2px solid var(--ink);
+    background: var(--page);
+    color: var(--ink);
     font-family: 'Caveat', cursive;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: 2px 2px 0 #3a2e1e;
+    box-shadow: 2px 2px 0 var(--shadow-color);
     transition: all 0.1s ease;
 }
 
 .btn:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 3px 3px 0 #3a2e1e;
+    box-shadow: 3px 3px 0 var(--shadow-color);
 }
 
 .btn:active {
@@ -211,24 +239,24 @@ input[type="range"] {
 
 .btn.primary {
     background: #e8d5f5;
-    border-color: #7b2d8b;
-    color: #7b2d8b;
-    box-shadow: 2px 2px 0 #7b2d8b;
+    border-color: var(--accent-purple);
+    color: var(--accent-purple);
+    box-shadow: 2px 2px 0 var(--accent-purple);
 }
 
 .btn.primary:hover {
-    box-shadow: 3px 3px 0 #7b2d8b;
+    box-shadow: 3px 3px 0 var(--accent-purple);
 }
 
 .btn.danger {
     background: #fdecea;
-    color: #c0392b;
-    border-color: #c0392b;
-    box-shadow: 2px 2px 0 #c0392b;
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+    box-shadow: 2px 2px 0 var(--accent-red);
 }
 
 .btn.danger:hover {
-    box-shadow: 3px 3px 0 #c0392b;
+    box-shadow: 3px 3px 0 var(--accent-red);
 }
 
 .footer {
@@ -241,6 +269,6 @@ input[type="range"] {
 .save-msg {
     font-family: 'Patrick Hand', cursive;
     font-size: 13px;
-    color: #2e7d32;
+    color: var(--accent-green);
     font-style: italic;
 }
