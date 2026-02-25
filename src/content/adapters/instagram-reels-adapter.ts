@@ -15,6 +15,8 @@ export class InstagramReelsAdapter extends BaseAdapter {
     private itemsSinceLastTick = 0;
     private lastReelId = "";
     private urlObserver: MutationObserver | null = null;
+    private lastWheelTime = 0;
+    private readonly WHEEL_DEBOUNCE_MS = 500; // Debounce wheel events to count as one swipe
 
     /* ── Video helpers ───────────────────────────────────── */
 
@@ -86,9 +88,11 @@ export class InstagramReelsAdapter extends BaseAdapter {
     }
 
     private onWheel = (e: WheelEvent) => {
-        if (Math.abs(e.deltaY) > 20) {
+        const now = Date.now();
+        if (Math.abs(e.deltaY) > 20 && now - this.lastWheelTime > this.WHEEL_DEBOUNCE_MS) {
+            this.lastWheelTime = now;
             this.swipeCount++;
-            this.itemsSinceLastTick++;  // Count as item for pack progress
+            this.itemsSinceLastTick++;
         }
     };
 
