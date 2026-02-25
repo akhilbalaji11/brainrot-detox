@@ -5,9 +5,14 @@
  * conflict with the host page.
  */
 
+import { getWidgetPosition, saveWidgetPosition } from "@/core/storage";
+import type { SiteKey, WidgetPosition } from "@/core/types";
+
 const HOST_ID = "brd-overlay-host";
 
 let shadowRoot: ShadowRoot | null = null;
+let currentSiteKey: SiteKey | null = null;
+let currentPosition: WidgetPosition = { edge: "right", verticalOffset: 20 };
 
 function ensureHost(): ShadowRoot {
   if (shadowRoot) return shadowRoot;
@@ -69,6 +74,97 @@ export function removeAllOverlays() {
 
 export function getOverlayRoot(): ShadowRoot {
   return ensureHost();
+}
+
+export async function initWidgetPosition(siteKey: SiteKey) {
+    currentSiteKey = siteKey;
+    currentPosition = await getWidgetPosition(siteKey);
+    applyWidgetPosition();
+}
+
+function applyWidgetPosition() {
+    if (!shadowRoot) return;
+    const widget = shadowRoot.querySelector('.brd-widget') as HTMLElement;
+    if (!widget) return;
+
+    widget.style.right = currentPosition.edge === 'right' ? `${currentPosition.verticalOffset}px` : 'auto';
+    widget.style.left = currentPosition.edge === 'left' ? `${currentPosition.verticalOffset}px` : 'auto';
+    widget.style.bottom = '20px';
+}
+
+export function setupWidgetDrag(widget: HTMLElement, siteKey: SiteKey) {
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startRight = 0;
+    let startBottom = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+        // Don't drag if clicking on interactive elements
+        if ((e.target as HTMLElement).closest('button, input, a')) return;
+
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startRight = currentPosition.edge === 'right' ? currentPosition.verticalOffset : window.innerWidth - widget.getBoundingClientRect().right;
+        startBottom = window.innerHeight - widget.getBoundingClientRect().bottom;
+
+        widget.style.cursor = 'grabbing';
+        widget.style.transition = 'none';
+        e.preventDefault();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+        if (!isDragging) return;
+
+        const deltaX = startX - e.clientX;
+        const deltaY = startY - e.clientY;
+
+        const newRight = startRight + deltaX;
+        const newBottom = startBottom + deltaY;
+
+        widget.style.right = `${Math.max(0, newRight)}px`;
+        widget.style.left = 'auto';
+        widget.style.bottom = `${Math.max(0, newBottom)}px`;
+    };
+
+    const onPointerUp = async (e: PointerEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+
+        widget.style.cursor = 'grab';
+        widget.style.transition = 'all 0.2s ease';
+
+        // Determine which edge is closer
+        const rect = widget.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const windowCenterX = window.innerWidth / 2;
+
+        const newEdge = centerX < windowCenterX ? 'left' : 'right';
+        const newVerticalOffset = newEdge === 'right'
+            ? window.innerWidth - rect.right
+            : rect.left;
+
+        // Snap to edge
+        currentPosition = {
+            edge: newEdge,
+            verticalOffset: Math.max(0, newVerticalOffset)
+        };
+
+        applyWidgetPosition();
+
+        // Save position
+        if (currentSiteKey) {
+            await saveWidgetPosition(currentSiteKey, currentPosition);
+        }
+    };
+
+    widget.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+
+    // Set initial cursor
+    widget.style.cursor = 'grab';
 }
 
 /* ──────────────────────────────────────────────────────── */
