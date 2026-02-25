@@ -55,6 +55,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
             if (Math.abs(delta) > 50) {
                 this.swipeCount++;
                 this.itemsSinceLastTick++;
+                this.recordActivity();
             }
         }, { passive: true });
 
@@ -96,6 +97,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
             this.lastWheelTime = now;
             this.swipeCount++;
             this.itemsSinceLastTick++;
+            this.recordActivity();
         }
     };
 
@@ -103,6 +105,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
         if (e.key === "ArrowDown" || e.key === "j") {
             this.swipeCount++;
             this.itemsSinceLastTick++;
+            this.recordActivity();
         }
     };
 

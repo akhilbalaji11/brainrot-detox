@@ -14,7 +14,7 @@ export class RedditAdapter extends BaseAdapter {
     private lastSeenItems = 0;
 
     protected setupObservers(): void {
-        window.addEventListener("scroll", () => { this.scrollCount++; }, { passive: true });
+        window.addEventListener("scroll", () => { this.scrollCount++; this.recordActivity(); }, { passive: true });
 
         const observer = new MutationObserver(() => {
             const items = document.querySelectorAll("shreddit-post, [data-testid='post-container'], .Post, article");

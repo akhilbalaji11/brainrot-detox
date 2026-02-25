@@ -55,6 +55,7 @@ export class TikTokAdapter extends BaseAdapter {
             if (Math.abs(delta) > 50) {
                 this.swipeCount++;
                 this.itemsSinceLastTick++;
+                this.recordActivity();
             }
         }, { passive: true });
 
@@ -96,6 +97,7 @@ export class TikTokAdapter extends BaseAdapter {
     private onWheel = (e: WheelEvent) => {
         if (Math.abs(e.deltaY) > 20) {
             this.swipeCount++;
+            this.recordActivity();
         }
     };
 
@@ -103,6 +105,7 @@ export class TikTokAdapter extends BaseAdapter {
         if (e.key === "ArrowDown" || e.key === "j") {
             this.swipeCount++;
             this.itemsSinceLastTick++;
+            this.recordActivity();
         }
     };
 

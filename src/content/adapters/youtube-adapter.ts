@@ -15,7 +15,7 @@ export class YouTubeAdapter extends BaseAdapter {
     private lastSeenItems = 0;
 
     protected setupObservers(): void {
-        window.addEventListener("scroll", () => { this.scrollCount++; }, { passive: true });
+        window.addEventListener("scroll", () => { this.scrollCount++; this.recordActivity(); }, { passive: true });
 
         // Watch for new feed items
         const observer = new MutationObserver(() => {
