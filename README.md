@@ -1,10 +1,10 @@
 # Brainrot Detox
 
 ```text
-  ____             _                  _     ____       _            
+  ____             _                  _     ____       _
  | __ ) _ __ __ _(_)_ __  _ __ ___ | |_  |  _ \  ___| |_ _____  __
  |  _ \| '__/ _` | | '_ \| '__/ _ \| __| | | | |/ _ \ __/ _ \ \/ /
- | |_) | | | (_| | | | | | | | (_) | |_  | |_| |  __/ || (_) >  < 
+ | |_) | | | (_| | | | | | | | (_) | |_  | |_| |  __/ || (_) >  <
  |____/|_|  \__,_|_|_| |_|_|  \___/ \__| |____/ \___|\__\___/_/\_\
 
  [B] your feed is infinite
@@ -13,13 +13,23 @@
 
 Your brain on infinite scroll is cooked. This extension is the detox.
 
-`Brainrot Detox` is a Chrome extension that watches your scrolling on YouTube, YouTube Shorts, and Reddit, then steps in before your frontal lobe files a missing person report.
+`Brainrot Detox` is a Chrome extension that watches your scrolling on YouTube, YouTube Shorts, Reddit, Instagram Reels, and TikTok — then steps in before your frontal lobe files a missing person report.
+
+## Supported Platforms
+
+| Platform | Navigation Detected |
+|----------|---------------------|
+| YouTube (feed) | Scroll, wheel |
+| YouTube Shorts | URL change, wheel, touch swipe, keyboard (↓ / j) |
+| Reddit | Scroll, wheel |
+| Instagram Reels | URL change, wheel (debounced), touch swipe, keyboard (↓ / j) |
+| TikTok | Video change, wheel, touch swipe, keyboard (↓ / j), watch time |
 
 ## What it does
 
 - `[%] Cooked Meter`: tracks scroll intensity and labels your state (`Based`, `Medium Cooked`, `Absolutely Cooked`).
-- `[#] Snack Packs`: tiny goals that break doomscroll momentum.
-- `[*] Touch Grass Mode`: temporarily locks the feed and forces a small reset.
+- `[#] Snack Packs`: tiny goals that break doomscroll momentum (item-based or time-based).
+- `[*] Touch Grass Mode`: temporarily locks the feed and forces a small reset with zen cat photos.
 - `✨ Vibe Check`: asks intent and adjusts strictness.
 - `Dashboard + Stats`: weekly progress, interventions, and pack completions.
 

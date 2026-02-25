@@ -6,7 +6,7 @@ const scoreEmoji = document.getElementById("scoreEmoji")!;
 const scoreNumber = document.getElementById("scoreNumber")!;
 const scoreLabel = document.getElementById("scoreLabel")!;
 const scoreHint = document.getElementById("scoreHint")!;
-const ringFill = document.getElementById("ringFill") as SVGCircleElement;
+const ringFill = document.getElementById("ringFill") as SVGCircleElement | null;
 const statusPill = document.getElementById("statusPill")!;
 const siteName = document.getElementById("siteName")!;
 const siteToggle = document.getElementById("siteToggle") as HTMLInputElement;
@@ -23,6 +23,7 @@ const btnDownloadNotes = document.getElementById("btnDownloadNotes")!;
 
 let currentSite: SiteKey | null = null;
 let currentTabId: number | null = null;
+let currentSettings: SettingsState | null = null;
 
 /* ── Init ─────────────────────────────────────────────── */
 
@@ -36,7 +37,7 @@ async function init() {
         const url = new URL(tab.url);
         currentSite = getSite(url);
 
-        const siteNames: Record<string, string> = { youtube: "YouTube", shorts: "YouTube Shorts", reddit: "Reddit" };
+        const siteNames: Record<string, string> = { youtube: "YouTube", shorts: "YouTube Shorts", reddit: "Reddit", "instagram-reels": "Instagram Reels", tiktok: "TikTok" };
         if (currentSite) {
             siteName.textContent = siteNames[currentSite] || currentSite;
         } else {
@@ -47,6 +48,7 @@ async function init() {
         // Get settings
         const settingsRes = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
         if (settingsRes?.success) {
+            currentSettings = settingsRes.data;
             const settings: SettingsState = settingsRes.data;
             statusPill.classList.toggle("inactive", !settings.masterEnabled);
             statusPill.querySelector(".status-text")!.textContent = settings.masterEnabled ? "Active" : "Off";
@@ -78,6 +80,15 @@ function getSite(url: URL): SiteKey | null {
         return url.pathname.startsWith("/shorts") ? "shorts" : "youtube";
     }
     if (url.hostname === "www.reddit.com") return "reddit";
+    if (url.hostname.endsWith("instagram.com")) {
+        if (url.pathname.startsWith("/reels") || url.pathname.startsWith("/reel")) {
+            return "instagram-reels";
+        }
+        return null;
+    }
+    if (url.hostname.endsWith("tiktok.com")) {
+        return "tiktok";
+    }
     return null;
 }
 
@@ -94,17 +105,19 @@ function updateScore(session: SessionState) {
     scoreHint.textContent = label.hint;
 
     // Ring animation (circumference = 2π * 52 ≈ 326.7)
-    const circumference = 326.7;
-    const offset = circumference - (score / 100) * circumference;
-    ringFill.style.strokeDashoffset = String(offset);
+    if (ringFill) {
+        const circumference = 326.7;
+        const offset = circumference - (score / 100) * circumference;
+        ringFill.style.strokeDashoffset = String(offset);
 
-    // Color the ring based on status (warm tones for light/notebook mode)
-    const colors: Record<string, string> = {
-        "Based": "#2e7d32",
-        "Medium Cooked": "#e65100",
-        "Absolutely Cooked": "#c0392b",
-    };
-    ringFill.style.stroke = colors[status] || "#7b2d8b";
+        // Color the ring based on status (warm tones for light/notebook mode)
+        const colors: Record<string, string> = {
+            "Based": "#2e7d32",
+            "Medium Cooked": "#e65100",
+            "Absolutely Cooked": "#c0392b",
+        };
+        ringFill.style.stroke = colors[status] || "#7b2d8b";
+    }
 }
 
 /* ── Listeners ────────────────────────────────────────── */
@@ -130,7 +143,8 @@ function setupListeners() {
     // Touch Grass
     btnGrass.addEventListener("click", async () => {
         if (currentTabId) {
-            await chrome.tabs.sendMessage(currentTabId, { type: "TRIGGER_TOUCH_GRASS", payload: { minutes: 5 } });
+            const minutes = currentSettings?.touchGrass.defaultMinutes ?? 5;
+            await chrome.tabs.sendMessage(currentTabId, { type: "TRIGGER_TOUCH_GRASS", payload: { minutes } });
         }
         window.close();
     });

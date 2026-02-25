@@ -234,6 +234,7 @@ const OVERLAY_CSS = `
     font-family: 'Caveat', cursive;
     color: #3a2e1e;
     letter-spacing: -0.5px;
+    white-space: pre;
   }
 
   .brd-widget-label {

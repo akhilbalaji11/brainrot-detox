@@ -1,6 +1,10 @@
 import { COOKED_LABELS, DEFAULT_THRESHOLDS, EMA_ALPHA, IDLE_DECAY_THRESHOLD_MS } from "./constants";
 import type { CookedStatus, CookedThresholds, VibeIntent } from "./types";
 
+/* ── TikTok scoring constants ─────────────────────────── */
+export const TIKTOK_WATCH_SCORE_PER_SECOND = 1 / 30;  // ~0.033 per second
+export const TIKTOK_SWIPE_SCORE = 1;
+
 /* ── Cooked score computation ─────────────────────────── */
 
 export function computeInstantScore(
@@ -96,6 +100,54 @@ export function shouldIntervene(
 
 export function isMaxCooked(score: number): boolean {
     return score >= 100;
+}
+
+/* ── TikTok cooked score (watch time + swipes) ─────────── */
+
+export function computeTikTokCookedScore(
+    previousScore: number,
+    watchTimeMs: number,
+    swipes: number,
+    vibeIntent: VibeIntent,
+    idleMs: number
+): number {
+    // Watch time contribution (capped at 3s per tick)
+    const watchSeconds = Math.min(watchTimeMs / 1000, 3);
+    const watchScore = watchSeconds * TIKTOK_WATCH_SCORE_PER_SECOND;
+
+    // Swipe contribution
+    const swipeScore = swipes * TIKTOK_SWIPE_SCORE;
+
+    const totalGain = watchScore + swipeScore;
+    const newScore = previousScore + totalGain;
+
+    // Idle decay (same as Shorts)
+    if (idleMs < 15000) return Math.min(100, Math.round(newScore));
+    if (idleMs < 60000) return Math.max(0, Math.round(newScore - 1));
+    return Math.max(0, Math.round(newScore - 3));
+}
+
+/* ── Instagram Reels cooked score (swipes only, same as Shorts) ─── */
+
+export function computeReelsCookedScore(
+    previousScore: number,
+    swipes: number,
+    vibeIntent: VibeIntent,
+    idleMs: number
+): number {
+    if (swipes > 0) {
+        return Math.max(0, Math.min(100, previousScore + swipes));
+    }
+
+    // Idle decay with vibe-based threshold
+    const decayThreshold =
+        vibeIntent === "Chill" || vibeIntent === "Laugh" ? 15000 :
+            vibeIntent === "Learn" || vibeIntent === "JustHere" ? 25000 :
+                20000;
+
+    if (idleMs < decayThreshold) return previousScore;
+    if (idleMs < 60000) return Math.max(0, previousScore - 1);
+    return Math.max(0, previousScore - 3);
 }
 
 /* ── Late-night check ─────────────────────────────────── */

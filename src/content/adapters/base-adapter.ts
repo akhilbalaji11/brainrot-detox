@@ -15,10 +15,10 @@ export abstract class BaseAdapter {
     protected session!: SessionState;
     protected enabled = false;
     private tickTimer: number | null = null;
-    private lastSignalAt = 0;
+    protected lastSignalAt = 0;
     protected scrollCount = 0;
     protected swipeCount = 0;
-    private maxCookedShown = false;
+    protected maxCookedShown = false;
     protected builtDifferentDismissed = false;
 
     /* ── Lifecycle ────────────────────────────────────────── */
@@ -97,7 +97,7 @@ export abstract class BaseAdapter {
 
     /* ── Tick loop ──────────────────────────────────────── */
 
-    private async tick() {
+    protected async tick() {
         if (!this.enabled) return;
 
         const now = Date.now();
@@ -258,6 +258,10 @@ export abstract class BaseAdapter {
     async endTouchGrass() {
         await sendMessage({ type: "END_TOUCH_GRASS", payload: { tabId: this.session.tabId } });
         this.session.touchGrass = { ...DEFAULT_TOUCH_GRASS };
+        // Reset cooked score after completing touch grass
+        this.session.cookedScore = 0;
+        this.session.cookedStatus = "Based";
+        this.maxCookedShown = false;
         this.removeAllOverlays();
     }
 

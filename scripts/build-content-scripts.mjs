@@ -22,6 +22,8 @@ const entries = [
     { name: "inject-shorts", globalName: "injectShorts", entry: resolve(root, "src/content/inject-shorts.ts") },
     { name: "inject-youtube", globalName: "injectYoutube", entry: resolve(root, "src/content/inject-youtube.ts") },
     { name: "inject-reddit", globalName: "injectReddit", entry: resolve(root, "src/content/inject-reddit.ts") },
+    { name: "inject-instagram", globalName: "injectInstagram", entry: resolve(root, "src/content/inject-instagram.ts") },
+    { name: "inject-tiktok", globalName: "injectTiktok", entry: resolve(root, "src/content/inject-tiktok.ts") },
 ];
 
 for (const { name, globalName, entry } of entries) {
