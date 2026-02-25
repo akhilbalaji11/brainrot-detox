@@ -62,6 +62,7 @@ export class ShortsAdapter extends BaseAdapter {
       if (Math.abs(delta) > 50) {
         this.swipeCount++;
         this.itemsSinceLastTick++;
+        this.recordActivity();
       }
     }, { passive: true });
 
@@ -94,10 +95,11 @@ export class ShortsAdapter extends BaseAdapter {
     });
   }
 
-  private onScroll = () => { this.scrollCount++; };
+  private onScroll = () => { this.scrollCount++; this.recordActivity(); };
   private onWheel = (e: WheelEvent) => {
     if (Math.abs(e.deltaY) > 20) {
       this.swipeCount++;
+      this.recordActivity();
     }
   };
 
@@ -105,6 +107,7 @@ export class ShortsAdapter extends BaseAdapter {
     if (e.key === "ArrowDown" || e.key === "j") {
       this.swipeCount++;
       this.itemsSinceLastTick++;
+      this.recordActivity();
     }
   };
 
@@ -117,6 +120,7 @@ export class ShortsAdapter extends BaseAdapter {
         this.lastVideoId = currentId;
         this.itemsSinceLastTick++;
         this.swipeCount++;
+        this.recordActivity();
       }
     }, 500);
   }
