@@ -1,4 +1,4 @@
-import { DEFAULT_PACK_STATE, DEFAULT_TOUCH_GRASS, TICK_INTERVAL_MS } from "@/core/constants";
+import { DEFAULT_PACK_STATE, DEFAULT_TOUCH_GRASS, TICK_FAST_MS, TICK_IDLE_MS, ACTIVITY_THRESHOLD_MS } from "@/core/constants";
 import { computeInstantScore, computeRollingScore, computeShortsCookedScore, deriveCookedStatus, isMaxCooked, shouldIntervene } from "@/core/cooked-meter";
 import { sendMessage } from "@/core/messaging";
 import { incrementPack, isPackComplete } from "@/core/snack-packs";
@@ -16,6 +16,7 @@ export abstract class BaseAdapter {
     protected enabled = false;
     private tickTimer: number | null = null;
     protected lastSignalAt = 0;
+    protected lastActivityAt = 0;
     protected scrollCount = 0;
     protected swipeCount = 0;
     protected maxCookedShown = false;
@@ -67,7 +68,8 @@ export abstract class BaseAdapter {
             this.setupObservers();
 
             // Start tick loop
-            this.tickTimer = window.setInterval(() => this.tick(), TICK_INTERVAL_MS);
+            this.lastActivityAt = Date.now();
+            this.scheduleNextTick();
 
             // Check if touch grass was already active
             if (this.session.touchGrass.active && this.session.touchGrass.endsAt > Date.now()) {
@@ -80,8 +82,28 @@ export abstract class BaseAdapter {
 
     destroy() {
         this.enabled = false;
-        if (this.tickTimer) clearInterval(this.tickTimer);
+        if (this.tickTimer) clearTimeout(this.tickTimer);
         this.removeAllOverlays();
+    }
+
+    /* ── Adaptive tick scheduling ───────────────────────────── */
+
+    protected scheduleNextTick() {
+        if (this.tickTimer) clearTimeout(this.tickTimer);
+
+        const now = Date.now();
+        const timeSinceActivity = now - this.lastActivityAt;
+        const useFastTick = timeSinceActivity < ACTIVITY_THRESHOLD_MS;
+        const interval = useFastTick ? TICK_FAST_MS : TICK_IDLE_MS;
+
+        this.tickTimer = window.setTimeout(() => {
+            this.tick();
+            this.scheduleNextTick();
+        }, interval);
+    }
+
+    protected recordActivity() {
+        this.lastActivityAt = Date.now();
     }
 
     /* ── Abstract methods subclasses must implement ──────── */
