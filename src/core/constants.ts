@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
         snoozeUntilMs: 0,
         activeIntent: "JustHere",
     },
+    theme: "light",
 };
 
 /* ── Default per-site stats ──────────────────────────── */

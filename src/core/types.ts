@@ -93,6 +93,7 @@ export interface SettingsState {
         snoozeUntilMs: number;
         activeIntent: VibeIntent;
     };
+    theme: "light" | "dark";
 }
 
 /* ── Stats (persisted) ────────────────────────────────── */
