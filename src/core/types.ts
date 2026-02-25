@@ -39,6 +39,15 @@ export interface TouchGrassState {
 /* ── Vibe Check ───────────────────────────────────────── */
 export type VibeIntent = "Chill" | "Learn" | "Laugh" | "Music" | "JustHere";
 
+/* ── Widget Position ──────────────────────────────────── */
+export interface WidgetPosition {
+    edge: "left" | "right";
+    verticalOffset: number; // pixels from bottom
+}
+
+/* ── Theme ────────────────────────────────────────────── */
+export type Theme = "light" | "dark";
+
 /* ── Session state (per-tab, lives in service worker) ── */
 export interface SessionState {
     site: SiteKey;
