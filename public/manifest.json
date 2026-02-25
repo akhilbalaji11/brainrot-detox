@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Brainrot Detox",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Your brain on infinite scroll is cooked. We're the detox.",
     "permissions": [
         "storage",
@@ -10,7 +10,9 @@
     ],
     "host_permissions": [
         "https://www.youtube.com/*",
-        "https://www.reddit.com/*"
+        "https://www.reddit.com/*",
+        "https://*.instagram.com/*",
+        "https://*.tiktok.com/*"
     ],
     "background": {
         "service_worker": "service-worker.js",
@@ -56,6 +58,25 @@
                 "inject-reddit.js"
             ],
             "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://*.instagram.com/reels/*",
+                "https://*.instagram.com/reel/*"
+            ],
+            "js": [
+                "inject-instagram.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://*.tiktok.com/*"
+            ],
+            "js": [
+                "inject-tiktok.js"
+            ],
+            "run_at": "document_idle"
         }
     ],
     "web_accessible_resources": [
@@ -65,7 +86,9 @@
             ],
             "matches": [
                 "https://www.youtube.com/*",
-                "https://www.reddit.com/*"
+                "https://www.reddit.com/*",
+                "https://*.instagram.com/*",
+                "https://*.tiktok.com/*"
             ]
         }
     ]
