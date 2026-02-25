@@ -44,6 +44,9 @@ export class TikTokAdapter extends BaseAdapter {
         // Track scroll/swipe events
         window.addEventListener("wheel", this.onWheel, { passive: true });
 
+        // Keyboard navigation (down arrow = next video)
+        window.addEventListener("keydown", this.onKeyDown, { passive: true });
+
         // Touch events for mobile swipe detection
         let touchStartY = 0;
         window.addEventListener("touchstart", (e) => { touchStartY = e.touches[0]?.clientY ?? 0; }, { passive: true });
@@ -93,6 +96,13 @@ export class TikTokAdapter extends BaseAdapter {
     private onWheel = (e: WheelEvent) => {
         if (Math.abs(e.deltaY) > 20) {
             this.swipeCount++;
+        }
+    };
+
+    private onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "ArrowDown" || e.key === "j") {
+            this.swipeCount++;
+            this.itemsSinceLastTick++;
         }
     };
 

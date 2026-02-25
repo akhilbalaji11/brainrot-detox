@@ -44,6 +44,9 @@ export class InstagramReelsAdapter extends BaseAdapter {
         // Track scroll/swipe events
         window.addEventListener("wheel", this.onWheel, { passive: true });
 
+        // Keyboard navigation (down arrow = next reel)
+        window.addEventListener("keydown", this.onKeyDown, { passive: true });
+
         // Touch events for mobile
         let touchStartY = 0;
         window.addEventListener("touchstart", (e) => { touchStartY = e.touches[0]?.clientY ?? 0; }, { passive: true });
@@ -91,6 +94,13 @@ export class InstagramReelsAdapter extends BaseAdapter {
         const now = Date.now();
         if (Math.abs(e.deltaY) > 20 && now - this.lastWheelTime > this.WHEEL_DEBOUNCE_MS) {
             this.lastWheelTime = now;
+            this.swipeCount++;
+            this.itemsSinceLastTick++;
+        }
+    };
+
+    private onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "ArrowDown" || e.key === "j") {
             this.swipeCount++;
             this.itemsSinceLastTick++;
         }

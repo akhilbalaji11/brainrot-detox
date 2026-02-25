@@ -45,6 +45,9 @@ export class ShortsAdapter extends BaseAdapter {
     window.addEventListener("scroll", this.onScroll, { passive: true });
     window.addEventListener("wheel", this.onWheel, { passive: true });
 
+    // Keyboard navigation (down arrow = next short)
+    window.addEventListener("keydown", this.onKeyDown, { passive: true });
+
     // Watch URL changes (Shorts navigation is via popstate / replaceState)
     this.watchUrlChanges();
 
@@ -95,6 +98,13 @@ export class ShortsAdapter extends BaseAdapter {
   private onWheel = (e: WheelEvent) => {
     if (Math.abs(e.deltaY) > 20) {
       this.swipeCount++;
+    }
+  };
+
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "ArrowDown" || e.key === "j") {
+      this.swipeCount++;
+      this.itemsSinceLastTick++;
     }
   };
 
