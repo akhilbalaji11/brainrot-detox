@@ -1,9 +1,10 @@
-import { DEFAULT_SETTINGS, DEFAULT_STATS } from "./constants";
-import type { SessionState, SettingsState, StatsState } from "./types";
+import { DEFAULT_SETTINGS, DEFAULT_STATS, DEFAULT_WIDGET_POSITION } from "./constants";
+import type { SessionState, SettingsState, StatsState, WidgetPosition } from "./types";
 
 const SETTINGS_KEY = "brd_settings";
 const STATS_KEY = "brd_stats";
 const SESSION_KEY = "brd_sessions";
+const WIDGET_POSITIONS_KEY = "brd_widget_positions";
 
 /* ── Generic helpers ──────────────────────────────────── */
 
@@ -73,6 +74,23 @@ export async function deleteSession(tabId: number): Promise<void> {
     const sessions = await getSessions();
     delete sessions[String(tabId)];
     await set(SESSION_KEY, sessions);
+}
+
+/* ── Widget Positions ─────────────────────────────────── */
+
+export async function getWidgetPositions(): Promise<Record<string, WidgetPosition>> {
+    return get<Record<string, WidgetPosition>>(WIDGET_POSITIONS_KEY, {});
+}
+
+export async function getWidgetPosition(siteKey: string): Promise<WidgetPosition> {
+    const positions = await getWidgetPositions();
+    return positions[siteKey] ?? DEFAULT_WIDGET_POSITION;
+}
+
+export async function saveWidgetPosition(siteKey: string, position: WidgetPosition): Promise<void> {
+    const positions = await getWidgetPositions();
+    positions[siteKey] = position;
+    await set(WIDGET_POSITIONS_KEY, positions);
 }
 
 /* ── Export / Import / Clear ──────────────────────────── */

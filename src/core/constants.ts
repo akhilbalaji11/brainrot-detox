@@ -1,4 +1,4 @@
-import type { CookedThresholds, PackPreset, PackState, SettingsState, SiteSettings, StatsState, TouchGrassState } from "./types";
+import type { CookedThresholds, PackPreset, PackState, SettingsState, SiteSettings, StatsState, TouchGrassState, WidgetPosition } from "./types";
 
 /* ── Cooked thresholds ────────────────────────────────── */
 export const DEFAULT_THRESHOLDS: CookedThresholds = {
@@ -124,3 +124,11 @@ export const SKYRIM_VIDEO_FILENAME = "skyrim-skeleton.mp4";
 export const EMA_ALPHA = 0.3;          // exponential smoothing factor
 export const TICK_INTERVAL_MS = 3000;  // cooked meter tick interval
 export const IDLE_DECAY_THRESHOLD_MS = 15_000;
+
+/* ── Adaptive timer constants ─────────────────────────── */
+export const TICK_FAST_MS = 500;
+export const TICK_IDLE_MS = 3000;
+export const ACTIVITY_THRESHOLD_MS = 2000;
+
+/* ── Default widget position ─────────────────────────── */
+export const DEFAULT_WIDGET_POSITION: WidgetPosition = { edge: "right", verticalOffset: 20 };
