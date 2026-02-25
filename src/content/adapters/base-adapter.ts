@@ -258,6 +258,10 @@ export abstract class BaseAdapter {
     async endTouchGrass() {
         await sendMessage({ type: "END_TOUCH_GRASS", payload: { tabId: this.session.tabId } });
         this.session.touchGrass = { ...DEFAULT_TOUCH_GRASS };
+        // Reset cooked score after completing touch grass
+        this.session.cookedScore = 0;
+        this.session.cookedStatus = "Based";
+        this.maxCookedShown = false;
         this.removeAllOverlays();
     }
 

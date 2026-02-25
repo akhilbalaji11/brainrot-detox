@@ -160,9 +160,12 @@ export class ShortsAdapter extends BaseAdapter {
     let packHtml = "";
     if (this.session.packState.active) {
       const progress = getPackProgress(this.session.packState);
+      const packLabel = this.session.packState.mode === "time" && progress.timeRemaining
+        ? `[#] Pack: ${progress.timeRemaining}`
+        : `[#] Pack: ${progress.current}/${progress.total}`;
       packHtml = `
         <div style="width:100%;margin-top:6px;">
-          <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">[#] Pack: ${progress.current}/${progress.total}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${packLabel}</div>
           <div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${progress.percent}%"></div></div>
         </div>
       `;
@@ -210,7 +213,7 @@ export class ShortsAdapter extends BaseAdapter {
     });
     wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
       removeOverlay("intervention");
-      this.startTouchGrass(5);
+      this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
     });
   }
 
@@ -237,7 +240,7 @@ export class ShortsAdapter extends BaseAdapter {
     wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
       removeOverlay("denied");
       this.thawFeed();
-      this.startTouchGrass(5);
+      this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
     });
     wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
       removeOverlay("denied");
@@ -284,7 +287,7 @@ export class ShortsAdapter extends BaseAdapter {
     wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
       removeOverlay("skyrim");
       this.thawFeed();
-      this.startTouchGrass(5);
+      this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
     });
     wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
       removeOverlay("skyrim");

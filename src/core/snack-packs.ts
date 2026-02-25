@@ -30,7 +30,7 @@ export function endPack(): PackState {
     return { ...DEFAULT_PACK_STATE };
 }
 
-export function getPackProgress(state: PackState, now: number = Date.now()): { current: number; total: number; percent: number } {
+export function getPackProgress(state: PackState, now: number = Date.now()): { current: number; total: number; percent: number; timeRemaining?: string } {
     if (!state.active) return { current: 0, total: 0, percent: 0 };
     if (state.mode === "items") {
         return {
@@ -40,9 +40,13 @@ export function getPackProgress(state: PackState, now: number = Date.now()): { c
         };
     }
     const elapsedMin = (now - state.startedAt) / 60_000;
+    const remainingMin = Math.max(0, state.limit - elapsedMin);
+    const mins = Math.floor(remainingMin);
+    const secs = Math.floor((remainingMin - mins) * 60);
     return {
         current: Math.round(elapsedMin),
         total: state.limit,
         percent: Math.min(100, Math.round((elapsedMin / state.limit) * 100)),
+        timeRemaining: `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`,
     };
 }
