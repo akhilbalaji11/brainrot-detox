@@ -90,9 +90,10 @@ function applyWidgetPosition() {
     const widget = shadowRoot.querySelector('.brd-widget') as HTMLElement;
     if (!widget) return;
 
-    widget.style.right = currentPosition.edge === 'right' ? `${currentPosition.verticalOffset}px` : 'auto';
-    widget.style.left = currentPosition.edge === 'left' ? `${currentPosition.verticalOffset}px` : 'auto';
-    widget.style.bottom = '20px';
+    // Position on the edge (0px) and use verticalOffset for bottom position
+    widget.style.right = currentPosition.edge === 'right' ? '0px' : 'auto';
+    widget.style.left = currentPosition.edge === 'left' ? '0px' : 'auto';
+    widget.style.bottom = `${currentPosition.verticalOffset}px`;
 }
 
 export async function applyTheme() {
