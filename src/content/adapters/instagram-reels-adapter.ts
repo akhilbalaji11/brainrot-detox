@@ -3,7 +3,7 @@ import { computeReelsCookedScore, deriveCookedStatus, getCookedLabel, isMaxCooke
 import { sendMessage } from "@/core/messaging";
 import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
 import type { CookedStatus, VibeIntent } from "@/core/types";
-import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
+import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
 /**
@@ -218,7 +218,8 @@ export class InstagramReelsAdapter extends BaseAdapter {
 
     /* ── Cooked widget ──────────────────────────────────── */
 
-    protected mountCookedWidget(): void {
+    protected async mountCookedWidget(): Promise<void> {
+        await initWidgetPosition(this.site);
         this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
     }
 
@@ -255,6 +256,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
         if (widget) {
             (widget as HTMLElement).style.cursor = "pointer";
             (widget as HTMLElement).onclick = () => this.showVibeCheckOverlay();
+            setupWidgetDrag(widget as HTMLElement, this.site);
         }
     }
 

@@ -2,7 +2,7 @@ import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
 import { getCookedLabel } from "@/core/cooked-meter";
 import { getPackProgress } from "@/core/snack-packs";
 import type { CookedStatus, VibeIntent } from "@/core/types";
-import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
+import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
 /**
@@ -54,7 +54,7 @@ export class YouTubeAdapter extends BaseAdapter {
         return c;
     }
 
-    protected mountCookedWidget(): void { this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus); }
+    protected async mountCookedWidget(): Promise<void> { await initWidgetPosition(this.site); this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus); }
 
     protected updateCookedWidget(score: number, status: string): void {
         const label = getCookedLabel(status as CookedStatus);
@@ -70,6 +70,8 @@ export class YouTubeAdapter extends BaseAdapter {
         const w = showOverlay("widget", `<div class="brd-widget"><span class="brd-widget-emoji">${label.emoji}</span><span class="brd-widget-label">${label.label}</span><span class="brd-widget-score ${scoreClass}">${score}</span>${packHtml}</div>`);
         const el = w.querySelector(".brd-widget") as HTMLElement;
         if (el) { el.style.cursor = "pointer"; el.onclick = () => this.showVibeCheckOverlay(); }
+        const widget = w.querySelector(".brd-widget") as HTMLElement;
+        if (widget) setupWidgetDrag(widget, this.site);
     }
 
     protected showInterventionOverlay(): void {
