@@ -1,6 +1,11 @@
 import type { StatsState } from "../core/types";
 
 async function init() {
+    // Load and apply theme
+    const settingsRes = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
+    const theme = settingsRes?.success && settingsRes.data?.theme ? settingsRes.data.theme : 'light';
+    applyTheme(theme);
+
     const res = await chrome.runtime.sendMessage({ type: "GET_STATS" });
     if (!res?.success) return;
     const stats: StatsState = res.data;
@@ -35,6 +40,26 @@ document.getElementById("btnCopy")!.addEventListener("click", async () => {
 document.getElementById("linkOptions")!.addEventListener("click", (e) => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
+});
+
+function applyTheme(theme: 'light' | 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById("btnTheme");
+    if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+// Theme toggle
+document.getElementById("btnTheme")!.addEventListener("click", async () => {
+    const res = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
+    const currentTheme = res?.success && res.data?.theme ? res.data.theme : 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    await chrome.runtime.sendMessage({
+        type: "UPDATE_SETTINGS",
+        payload: { theme: newTheme }
+    });
+
+    applyTheme(newTheme);
 });
 
 document.addEventListener("DOMContentLoaded", init);

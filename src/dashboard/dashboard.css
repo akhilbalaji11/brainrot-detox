@@ -84,6 +84,37 @@ body {
     font-style: italic;
 }
 
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.theme-toggle {
+    background: var(--page);
+    border: 2px solid var(--border-muted);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 2px 2px 0 var(--shadow-color);
+}
+
+.theme-toggle:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--shadow-color);
+}
+
+:root[data-theme="dark"] .theme-toggle {
+    background: var(--page);
+    border-color: var(--border-muted);
+}
+
 .cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
