@@ -3,7 +3,7 @@ import { computeTikTokCookedScore, deriveCookedStatus, getCookedLabel, isMaxCook
 import { sendMessage } from "@/core/messaging";
 import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
 import type { CookedStatus, VibeIntent } from "@/core/types";
-import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay } from "../overlays/overlay-manager";
+import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay, updateWidgetOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
 /**
@@ -209,20 +209,35 @@ export class TikTokAdapter extends BaseAdapter {
             `;
         }
 
-        const wrapper = showOverlay("widget", `
-            <div class="brd-widget">
-                <span class="brd-widget-emoji">${label.emoji}</span>
-                <span class="brd-widget-label">${label.label}</span>
-                <span class="brd-widget-score ${scoreClass}">${score}</span>
-                ${packHtml}
-            </div>
-        `);
+        // Check if widget already exists
+        const widgetExists = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`);
 
-        const widget = wrapper.querySelector(".brd-widget");
-        if (widget) {
-            (widget as HTMLElement).style.cursor = "pointer";
-            (widget as HTMLElement).onclick = () => this.showVibeCheckOverlay();
-            setupWidgetDrag(widget as HTMLElement, this.site);
+        if (widgetExists) {
+            // Update existing widget in-place
+            updateWidgetOverlay(score, status, packHtml);
+            // Re-attach click handler for vibe check
+            const widget = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`) as HTMLElement;
+            if (widget) {
+                widget.style.cursor = "pointer";
+                widget.onclick = () => this.showVibeCheckOverlay();
+            }
+        } else {
+            // Create new widget
+            const wrapper = showOverlay("widget", `
+                <div class="brd-widget">
+                    <span class="brd-widget-emoji">${label.emoji}</span>
+                    <span class="brd-widget-label">${label.label}</span>
+                    <span class="brd-widget-score ${scoreClass}">${score}</span>
+                    ${packHtml}
+                </div>
+            `);
+
+            const widget = wrapper.querySelector(".brd-widget");
+            if (widget) {
+                (widget as HTMLElement).style.cursor = "pointer";
+                (widget as HTMLElement).onclick = () => this.showVibeCheckOverlay();
+                setupWidgetDrag(widget as HTMLElement, this.site);
+            }
         }
     }
 

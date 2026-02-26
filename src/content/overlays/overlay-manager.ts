@@ -64,6 +64,59 @@ export function showOverlay(name: string, html: string): HTMLElement {
   return wrapper;
 }
 
+/** Update the widget overlay in-place (preserves position and drag handlers) */
+export function updateWidgetOverlay(score: number, status: string, packHtml: string): void {
+    const root = ensureHost();
+    const existing = root.querySelector(`[data-overlay="widget"]`) as HTMLElement;
+    if (!existing) return;
+
+    const widget = existing.querySelector('.brd-widget') as HTMLElement;
+    if (!widget) return;
+
+    // Get the label based on status
+    const getCookedLabel = (status: string) => {
+        const labels: Record<string, { emoji: string; label: string }> = {
+            "Based": { emoji: "( ._.)", label: "Based" },
+            "Medium Cooked": { emoji: "( ◕_◕)", label: "Medium" },
+            "Absolutely Cooked": { emoji: "( x_x)", label: "Cooked" }
+        };
+        return labels[status] || labels["Based"];
+    };
+
+    const label = getCookedLabel(status);
+    const scoreClass =
+        status === "Based" ? "brd-score-based" :
+            status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
+
+    // Update the score element
+    const scoreEl = widget.querySelector('.brd-widget-score') as HTMLElement;
+    if (scoreEl) {
+        scoreEl.textContent = String(score);
+        scoreEl.className = `brd-widget-score ${scoreClass}`;
+    }
+
+    // Update the emoji
+    const emojiEl = widget.querySelector('.brd-widget-emoji') as HTMLElement;
+    if (emojiEl) {
+        emojiEl.textContent = label.emoji;
+    }
+
+    // Update the label
+    const labelEl = widget.querySelector('.brd-widget-label') as HTMLElement;
+    if (labelEl) {
+        labelEl.textContent = label.label;
+    }
+
+    // Update pack HTML (remove existing, add new if present)
+    const existingPack = widget.querySelector('.brd-pack-bar')?.parentElement;
+    if (existingPack) {
+        existingPack.remove();
+    }
+    if (packHtml) {
+        widget.insertAdjacentHTML('beforeend', packHtml);
+    }
+}
+
 export function removeOverlay(name: string) {
   if (!shadowRoot) return;
   const el = shadowRoot.querySelector(`[data-overlay="${name}"]`);

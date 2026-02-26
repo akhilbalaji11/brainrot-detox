@@ -2,7 +2,7 @@ import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
 import { getCookedLabel } from "@/core/cooked-meter";
 import { getPackProgress } from "@/core/snack-packs";
 import type { CookedStatus, VibeIntent } from "@/core/types";
-import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay } from "../overlays/overlay-manager";
+import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay, updateWidgetOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
 /**
@@ -67,11 +67,27 @@ export class YouTubeAdapter extends BaseAdapter {
                 : `[#] Pack: ${p.current}/${p.total}`;
             packHtml = `<div style="width:100%;margin-top:6px;"><div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${packLabel}</div><div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${p.percent}%"></div></div></div>`;
         }
-        const w = showOverlay("widget", `<div class="brd-widget"><span class="brd-widget-emoji">${label.emoji}</span><span class="brd-widget-label">${label.label}</span><span class="brd-widget-score ${scoreClass}">${score}</span>${packHtml}</div>`);
-        const el = w.querySelector(".brd-widget") as HTMLElement;
-        if (el) { el.style.cursor = "pointer"; el.onclick = () => this.showVibeCheckOverlay(); }
-        const widget = w.querySelector(".brd-widget") as HTMLElement;
-        if (widget) setupWidgetDrag(widget, this.site);
+
+        // Check if widget already exists
+        const widgetExists = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`);
+
+        if (widgetExists) {
+            // Update existing widget in-place
+            updateWidgetOverlay(score, status, packHtml);
+            // Re-attach click handler for vibe check
+            const widget = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`) as HTMLElement;
+            if (widget) {
+                widget.style.cursor = "pointer";
+                widget.onclick = () => this.showVibeCheckOverlay();
+            }
+        } else {
+            // Create new widget
+            const w = showOverlay("widget", `<div class="brd-widget"><span class="brd-widget-emoji">${label.emoji}</span><span class="brd-widget-label">${label.label}</span><span class="brd-widget-score ${scoreClass}">${score}</span>${packHtml}</div>`);
+            const el = w.querySelector(".brd-widget") as HTMLElement;
+            if (el) { el.style.cursor = "pointer"; el.onclick = () => this.showVibeCheckOverlay(); }
+            const widget = w.querySelector(".brd-widget") as HTMLElement;
+            if (widget) setupWidgetDrag(widget, this.site);
+        }
     }
 
     protected showInterventionOverlay(): void {
