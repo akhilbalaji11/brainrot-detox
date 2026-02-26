@@ -33,6 +33,7 @@ async function loadSettings() {
     const s: SettingsState = res.data;
 
     (document.getElementById("masterEnabled") as HTMLInputElement).checked = s.masterEnabled;
+    (document.getElementById("darkMode") as HTMLInputElement).checked = (s.theme ?? 'light') === 'dark';
     (document.getElementById("feat-cookedMeter") as HTMLInputElement).checked = s.sites.youtube.cookedMeter;
     (document.getElementById("feat-snackPacks") as HTMLInputElement).checked = s.sites.youtube.snackPacks;
     (document.getElementById("feat-touchGrass") as HTMLInputElement).checked = s.sites.youtube.touchGrass;
@@ -55,6 +56,7 @@ async function loadSettings() {
 
 document.getElementById("btnSave")!.addEventListener("click", async () => {
     const masterEnabled = (document.getElementById("masterEnabled") as HTMLInputElement).checked;
+    const darkMode = (document.getElementById("darkMode") as HTMLInputElement).checked;
     const threshold = parseInt((document.getElementById("threshold") as HTMLInputElement).value, 10);
     const grassMin = parseInt((document.getElementById("grassMin") as HTMLInputElement).value, 10);
     const vibeInt = parseInt((document.getElementById("vibeInt") as HTMLInputElement).value, 10);
@@ -73,6 +75,7 @@ document.getElementById("btnSave")!.addEventListener("click", async () => {
         type: "UPDATE_SETTINGS",
         payload: {
             masterEnabled,
+            theme: darkMode ? 'dark' : 'light',
             sites: siteStates,
             cooked: { thresholds: { intervention: threshold } },
             touchGrass: { defaultMinutes: grassMin },
