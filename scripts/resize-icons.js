@@ -1,6 +1,6 @@
 // Simple icon resize script using canvas (no external dependencies)
-const fs = require('fs');
-const { createCanvas } = require('canvas');
+import fs from 'fs';
+import { createCanvas, loadImage } from 'canvas';
 
 const sizes = [16, 48, 128];
 const sourcePath = './icon.png';
@@ -17,15 +17,6 @@ async function resizeIcons() {
         fs.writeFileSync(`./public/icons/icon${size}.png`, buffer);
         console.log(`Created icon${size}.png`);
     }
-}
-
-function loadImage(path) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = path;
-    });
 }
 
 resizeIcons().catch(console.error);
