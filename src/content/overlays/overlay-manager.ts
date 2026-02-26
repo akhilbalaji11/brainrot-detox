@@ -111,20 +111,18 @@ export async function applyTheme() {
 
 export function setupWidgetDrag(widget: HTMLElement, siteKey: SiteKey) {
     let isDragging = false;
-    let startX = 0;
     let startY = 0;
-    let startRight = 0;
     let startBottom = 0;
+    let currentEdge: 'left' | 'right' = currentPosition.edge;
 
     const onPointerDown = (e: PointerEvent) => {
         // Don't drag if clicking on interactive elements
         if ((e.target as HTMLElement).closest('button, input, a')) return;
 
         isDragging = true;
-        startX = e.clientX;
         startY = e.clientY;
-        startRight = currentPosition.edge === 'right' ? currentPosition.verticalOffset : window.innerWidth - widget.getBoundingClientRect().right;
         startBottom = window.innerHeight - widget.getBoundingClientRect().bottom;
+        currentEdge = currentPosition.edge;
 
         widget.style.cursor = 'grabbing';
         widget.style.transition = 'none';
@@ -134,15 +132,13 @@ export function setupWidgetDrag(widget: HTMLElement, siteKey: SiteKey) {
     const onPointerMove = (e: PointerEvent) => {
         if (!isDragging) return;
 
-        const deltaX = startX - e.clientX;
         const deltaY = startY - e.clientY;
-
-        const newRight = startRight + deltaX;
         const newBottom = startBottom + deltaY;
 
-        widget.style.right = `${Math.max(0, newRight)}px`;
-        widget.style.left = 'auto';
-        widget.style.bottom = `${Math.max(0, newBottom)}px`;
+        // Only move vertically, keep on the same edge
+        widget.style.left = currentEdge === 'left' ? '0px' : 'auto';
+        widget.style.right = currentEdge === 'right' ? '0px' : 'auto';
+        widget.style.bottom = `${Math.max(0, Math.min(newBottom, window.innerHeight - 100))}px`;
     };
 
     const onPointerUp = async (e: PointerEvent) => {
@@ -152,20 +148,19 @@ export function setupWidgetDrag(widget: HTMLElement, siteKey: SiteKey) {
         widget.style.cursor = 'grab';
         widget.style.transition = 'all 0.2s ease';
 
-        // Determine which edge is closer
-        const rect = widget.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
+        // Determine which edge based on pointer position
+        const pointerX = e.clientX;
         const windowCenterX = window.innerWidth / 2;
+        const newEdge = pointerX < windowCenterX ? 'left' : 'right';
 
-        const newEdge = centerX < windowCenterX ? 'left' : 'right';
-        const newVerticalOffset = newEdge === 'right'
-            ? window.innerWidth - rect.right
-            : rect.left;
+        // Calculate vertical offset from bottom
+        const rect = widget.getBoundingClientRect();
+        const verticalOffset = Math.max(0, window.innerHeight - rect.bottom);
 
-        // Snap to edge
+        // Update position
         currentPosition = {
             edge: newEdge,
-            verticalOffset: Math.max(0, newVerticalOffset)
+            verticalOffset: Math.max(0, verticalOffset)
         };
 
         applyWidgetPosition();

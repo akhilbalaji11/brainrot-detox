@@ -13,6 +13,7 @@ const siteToggle = document.getElementById("siteToggle") as HTMLInputElement;
 const btnPack = document.getElementById("btnPack")!;
 const btnGrass = document.getElementById("btnGrass")!;
 const btnVibe = document.getElementById("btnVibe")!;
+const btnTheme = document.getElementById("btnTheme")!;
 const packMenu = document.getElementById("packMenu")!;
 const linkOptions = document.getElementById("linkOptions")!;
 const linkDashboard = document.getElementById("linkDashboard")!;
@@ -55,6 +56,9 @@ async function init() {
             if (currentSite) {
                 siteToggle.checked = settings.sites[currentSite]?.enabled ?? true;
             }
+            // Apply theme
+            const theme = settings.theme ?? 'light';
+            applyTheme(theme);
         }
 
         // Get session for current tab
@@ -93,6 +97,11 @@ function getSite(url: URL): SiteKey | null {
 }
 
 /* ── Update score display ─────────────────────────────── */
+
+function applyTheme(theme: 'light' | 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (btnTheme) btnTheme.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
 
 function updateScore(session: SessionState) {
     const score = session.cookedScore;
@@ -176,6 +185,20 @@ function setupListeners() {
     linkDashboard.addEventListener("click", (e) => {
         e.preventDefault();
         chrome.tabs.create({ url: chrome.runtime.getURL("src/dashboard/dashboard.html") });
+    });
+
+    // Theme toggle
+    btnTheme.addEventListener("click", async () => {
+        const res = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
+        const currentTheme = res?.success && res.data?.theme ? res.data.theme : 'light';
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        await chrome.runtime.sendMessage({
+            type: "UPDATE_SETTINGS",
+            payload: { theme: newTheme }
+        });
+
+        applyTheme(newTheme);
     });
 }
 

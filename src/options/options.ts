@@ -1,5 +1,11 @@
 import type { SettingsState, SiteKey } from "../core/types";
 
+/* ── Theme ─────────────────────────────────────────────── */
+
+function applyTheme(theme: 'light' | 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+}
+
 /* ── Tabs ─────────────────────────────────────────────── */
 
 document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
@@ -24,6 +30,13 @@ function syncRange(id: string, valId: string) {
 syncRange("threshold", "val-threshold");
 syncRange("grassMin", "val-grassMin");
 syncRange("vibeInt", "val-vibeInt");
+
+/* ── Dark mode live preview ───────────────────────────── */
+
+(document.getElementById("darkMode") as HTMLInputElement).addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement;
+    applyTheme(target.checked ? 'dark' : 'light');
+});
 
 /* ── Load settings ────────────────────────────────────── */
 
@@ -50,6 +63,9 @@ async function loadSettings() {
         const site = el.dataset.site as SiteKey;
         el.checked = s.sites[site]?.enabled ?? true;
     });
+
+    // Apply theme
+    applyTheme(s.theme ?? 'light');
 }
 
 /* ── Save ─────────────────────────────────────────────── */
