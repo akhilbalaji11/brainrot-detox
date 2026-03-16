@@ -1,7 +1,18 @@
-var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,configurable:!0,writable:!0,value:k}):v[g]=k;var h=(v,g,k)=>xe(v,typeof g!="symbol"?g+"":g,k);(function(){"use strict";const v={basedMax:35,mediumMax:65,intervention:80,cooldownMs:6e4},g={active:!1,mode:"items",limit:10,consumed:0,startedAt:0},k={active:!1,endsAt:0,bypassCount:0},F=["[>] Step outside for 2 minutes","[~] Drink a glass of water","[o] Do 5 deep breaths","[!] Do 10 jumping jacks","[*] Look at something 20 feet away for 20 seconds","[♪] Put on your favorite song","[>] Text a friend something nice","[=] Open a window and feel the air"],L={based:{emoji:"( ._.)",label:"Based",hint:"Keep it chill, you're doing great."},medium:{emoji:"(-_-;)",label:"Medium Cooked",hint:"Maybe take a breather soon?"},cooked:{emoji:"(x_x) ",label:"Absolutely Cooked",hint:"Bro. Step away from the screen."}},W=[{id:"Chill",emoji:"~_~",label:"Just Vibing"},{id:"Learn",emoji:"o_O",label:"Learn Something"},{id:"Laugh",emoji:"xD",label:"Get Entertained"},{id:"Music",emoji:"♪♫",label:"Music / Audio"},{id:"JustHere",emoji:"...",label:"I'm Just Here"}],z=.3,U=15e3,Y=500,K=3e3,Z=2e3,X={edge:"right",verticalOffset:20};function J(t,o,e,s){const i=Math.min(1,t/o),a=Math.min(1,e/150),r=Math.min(1,s/60),d=i*35+a*35+r*30;return Math.round(Math.min(100,d))}function Q(t,o,e,s,i){const a=i==="Learn"?1.3:i==="JustHere"?1.1:i==="Laugh"?.8:i==="Chill"?.7:1;if(e){const d=o*a,n=t*(1-z)+d*z;return Math.max(0,Math.min(100,Math.round(n)))}if(s<U)return t;const r=s<45e3?1:s<9e4?2:4;return Math.max(0,t-r)}function ee(t,o,e,s){return o>0?Math.max(0,Math.min(100,t+o)):s<(e==="Chill"||e==="Laugh"?15e3:e==="Learn"||e==="JustHere"?25e3:2e4)?t:s<6e4?Math.max(0,t-1):Math.max(0,t-3)}function te(t,o=v){return t<=o.basedMax?"Based":t<=o.mediumMax?"Medium Cooked":"Absolutely Cooked"}function j(t){return t==="Based"?L.based:t==="Medium Cooked"?L.medium:L.cooked}function se(t,o,e=v,s=Date.now()){return!(t<e.intervention||s-o<e.cooldownMs)}function oe(t){return t>=100}function ie(t,o=1){return t.active?{...t,consumed:t.consumed+o}:t}function ae(t,o=Date.now()){return t.active?t.mode==="items"?t.consumed>=t.limit:t.mode==="time"?(o-t.startedAt)/6e4>=t.limit:!1:!1}function re(t,o=Date.now()){if(!t.active)return{current:0,total:0,percent:0};if(t.mode==="items")return{current:t.consumed,total:t.limit,percent:Math.min(100,Math.round(t.consumed/t.limit*100))};const e=(o-t.startedAt)/6e4,s=Math.max(0,t.limit-e),i=Math.floor(s),a=Math.floor((s-i)*60);return{current:Math.round(e),total:t.limit,percent:Math.min(100,Math.round(e/t.limit*100)),timeRemaining:`${String(i).padStart(2,"0")}:${String(a).padStart(2,"0")}`}}const q="brd_widget_positions";async function ne(t,o){return(await chrome.storage.local.get(t))[t]??o}async function de(t,o){await chrome.storage.local.set({[t]:o})}async function R(){return ne(q,{})}async function ce(t){return(await R())[t]??X}async function le(t,o){const e=await R();e[t]=o,await de(q,e)}const D="brd-overlay-host";let u=null,_=null,x={edge:"right",verticalOffset:20};function B(){if(u)return u;let t=document.getElementById(D);if(t||(t=document.createElement("div"),t.id=D,t.style.cssText="position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;",document.documentElement.appendChild(t)),t.shadowRoot)return u=t.shadowRoot,u;u=t.attachShadow({mode:"open"});const o=document.createElement("style");o.textContent=fe,u.appendChild(o);const e=document.createElement("link");return e.rel="stylesheet",e.href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap",u.appendChild(e),pe(),u}function C(t,o){const e=B(),s=e.querySelector(`[data-overlay="${t}"]`);s&&s.remove();const i=document.createElement("div");return i.setAttribute("data-overlay",t),i.innerHTML=o,e.appendChild(i),i}function he(t,o,e){var w;const i=B().querySelector('[data-overlay="widget"]');if(!i)return;const a=i.querySelector(".brd-widget");if(!a)return;const d=(E=>{const l={Based:{emoji:"( ._.)",label:"Based"},"Medium Cooked":{emoji:"( ◕_◕)",label:"Medium"},"Absolutely Cooked":{emoji:"( x_x)",label:"Cooked"}};return l[E]||l.Based})(o),n=o==="Based"?"brd-score-based":o==="Medium Cooked"?"brd-score-medium":"brd-score-cooked",c=a.querySelector(".brd-widget-score");c&&(c.textContent=String(t),c.className=`brd-widget-score ${n}`);const m=a.querySelector(".brd-widget-emoji");m&&(m.textContent=d.emoji);const y=a.querySelector(".brd-widget-label");y&&(y.textContent=d.label);const S=(w=a.querySelector(".brd-pack-bar"))==null?void 0:w.parentElement;S&&S.remove(),e&&a.insertAdjacentHTML("beforeend",e)}function b(t){if(!u)return;const o=u.querySelector(`[data-overlay="${t}"]`);o&&o.remove()}function be(){u&&u.querySelectorAll("[data-overlay]").forEach(t=>t.remove())}async function ue(t){_=t,x=await ce(t),H()}function H(){if(!u)return;const t=u.querySelector(".brd-widget");t&&(t.style.right=x.edge==="right"?"0px":"auto",t.style.left=x.edge==="left"?"0px":"auto",t.style.bottom=`${x.verticalOffset}px`)}async function pe(){var s;const t=await chrome.runtime.sendMessage({type:"GET_SETTINGS"}),o=t!=null&&t.success&&((s=t.data)!=null&&s.theme)?t.data.theme:"light",e=document.getElementById(D);e&&(o==="dark"?e.classList.add("brd-dark"):e.classList.remove("brd-dark"))}function me(t,o){let e=!1,s=0,i=0,a=x.edge;const r=c=>{c.target.closest("button, input, a")||(e=!0,s=c.clientY,i=window.innerHeight-t.getBoundingClientRect().bottom,a=x.edge,t.style.cursor="grabbing",t.style.transition="none",c.preventDefault())},d=c=>{if(!e)return;const m=s-c.clientY,y=i+m;t.style.left=a==="left"?"0px":"auto",t.style.right=a==="right"?"0px":"auto",t.style.bottom=`${Math.max(0,Math.min(y,window.innerHeight-100))}px`},n=async c=>{if(!e)return;e=!1,t.style.cursor="grab",t.style.transition="all 0.2s ease";const m=c.clientX,y=window.innerWidth/2,S=m<y?"left":"right",w=t.getBoundingClientRect(),E=Math.max(0,window.innerHeight-w.bottom);x={edge:S,verticalOffset:Math.max(0,E)},H(),_&&await le(_,x)};t.addEventListener("pointerdown",r),document.addEventListener("pointermove",d),document.addEventListener("pointerup",n),t.style.cursor="grab"}const fe=`
+var Ae=Object.defineProperty;var Le=(x,y,T)=>y in x?Ae(x,y,{enumerable:!0,configurable:!0,writable:!0,value:T}):x[y]=T;var h=(x,y,T)=>Le(x,typeof y!="symbol"?y+"":y,T);(function(){"use strict";const x={basedMax:35,mediumMax:65,intervention:80,cooldownMs:6e4},y={active:!1,mode:"items",limit:10,consumed:0,startedAt:0},T={active:!1,endsAt:0,bypassCount:0},Z=["[>] Step outside for 2 minutes","[~] Drink a glass of water","[o] Do 5 deep breaths","[!] Do 10 jumping jacks","[*] Look at something 20 feet away for 20 seconds","[♪] Put on your favorite song","[>] Text a friend something nice","[=] Open a window and feel the air"],P={based:{emoji:"( ._.)",label:"Based",hint:"Keep it chill, you're doing great."},medium:{emoji:"(-_-;)",label:"Medium Cooked",hint:"Maybe take a breather soon?"},cooked:{emoji:"(x_x) ",label:"Absolutely Cooked",hint:"Bro. Step away from the screen."}},Q=[{id:"Chill",emoji:"~_~",label:"Just Vibing"},{id:"Learn",emoji:"o_O",label:"Learn Something"},{id:"Laugh",emoji:"xD",label:"Get Entertained"},{id:"Music",emoji:"♪♫",label:"Music / Audio"},{id:"JustHere",emoji:"...",label:"I'm Just Here"}],B=.3,ee=15e3,te=500,se=3e3,ie=2e3,N=4e3,oe=.35,re=3,W={edge:"right",verticalOffset:20};function A(t){return Math.max(0,Math.min(100,t))}function ae(t){return t==="Chill"||t==="Laugh"?15e3:t==="Learn"||t==="JustHere"?25e3:2e4}function ne(t,s,e,i){const o=Math.min(1,t/s),r=Math.min(1,e/150),a=Math.min(1,i/60),n=o*35+r*35+a*30;return Math.round(Math.min(100,n))}function de(t,s,e,i,o){const r=o==="Learn"?1.3:o==="JustHere"?1.1:o==="Laugh"?.8:o==="Chill"?.7:1;if(e){const n=s*r,c=t*(1-B)+n*B;return A(c)}if(i<ee)return t;const a=i<45e3?1:i<9e4?2:4;return A(t-a)}function ce(t,s,e,i){if(s>0)return A(t+s);const o=ae(e);return i<o?t:i<6e4?A(t-1):A(t-3)}function le(t,s=x){return t<=s.basedMax?"Based":t<=s.mediumMax?"Medium Cooked":"Absolutely Cooked"}function F(t){return t==="Based"?P.based:t==="Medium Cooked"?P.medium:P.cooked}function he(t,s,e=x,i=Date.now()){return!(t<e.intervention||i-s<e.cooldownMs)}function ue(t){return t>=100}const U="brd_widget_positions";async function be(t,s){return(await chrome.storage.local.get(t))[t]??s}async function pe(t,s){await chrome.storage.local.set({[t]:s})}async function $(){return be(U,{})}async function me(t){return(await $())[t]??W}async function fe(t,s){const e=await $();e[t]=s,await pe(U,e)}const G="brd-overlay-host",ge=8;let m=null,w={...W},f=null,I=null;function Y(){if(m)return m;let t=document.getElementById(G);if(t||(t=document.createElement("div"),t.id=G,t.style.cssText="position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;",document.documentElement.appendChild(t)),t.shadowRoot)return m=t.shadowRoot,K(),m;m=t.attachShadow({mode:"open"});const s=document.createElement("style");s.textContent=Se,m.appendChild(s);const e=document.createElement("link");return e.rel="stylesheet",e.href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap",m.appendChild(e),K(),m}function L(t,s){const e=Y(),i=e.querySelector(`[data-overlay="${t}"]`);i&&i.remove();const o=document.createElement("div");return o.setAttribute("data-overlay",t),o.innerHTML=s,e.appendChild(o),o}function ve(t){const s=Y();I=t.onActivate??null;let e=s.querySelector('[data-overlay="widget"]');if(!e){e=document.createElement("div"),e.setAttribute("data-overlay","widget"),e.innerHTML=`
+      <div class="brd-widget">
+        <div class="brd-widget-main">
+          <span class="brd-widget-emoji"></span>
+          <span class="brd-widget-label"></span>
+          <span class="brd-widget-score"></span>
+        </div>
+        <div class="brd-widget-pack" hidden>
+          <div class="brd-widget-pack-label"></div>
+          <div class="brd-pack-bar"><div class="brd-pack-fill"></div></div>
+        </div>
+      </div>
+    `,s.appendChild(e);const i=e.querySelector(".brd-widget");i&&(f==null||f(),f=ke(i,t.siteKey))}return we(e,t),_(),e}function u(t){const s=m;if(!s)return;const e=s.querySelector(`[data-overlay="${t}"]`);e&&(t==="widget"&&(f==null||f(),f=null,I=null),e.remove())}function ye(){const t=m;t&&(f==null||f(),f=null,I=null,t.querySelectorAll("[data-overlay]").forEach(s=>s.remove()))}async function xe(t){w=await me(t),_()}async function K(){var i;const t=await chrome.runtime.sendMessage({type:"GET_SETTINGS"}),s=t!=null&&t.success&&((i=t.data)!=null&&i.theme)?t.data.theme:"light",e=document.getElementById(G);e&&(s==="dark"?e.classList.add("brd-dark"):e.classList.remove("brd-dark"))}function we(t,s){const e=t.querySelector(".brd-widget");if(!e)return;const i=F(s.status),o=s.status==="Based"?"brd-score-based":s.status==="Medium Cooked"?"brd-score-medium":"brd-score-cooked",r=e.querySelector(".brd-widget-emoji"),a=e.querySelector(".brd-widget-label"),n=e.querySelector(".brd-widget-score"),c=e.querySelector(".brd-widget-pack"),g=e.querySelector(".brd-widget-pack-label"),p=e.querySelector(".brd-pack-fill");r&&(r.textContent=i.emoji),a&&(a.textContent=i.label),n&&(n.textContent=String(Math.round(s.score)),n.className=`brd-widget-score ${o}`),c&&g&&p&&(s.pack?(c.hidden=!1,g.textContent=s.pack.label,p.style.width=`${Math.max(0,Math.min(100,s.pack.percent))}%`):(c.hidden=!0,g.textContent="",p.style.width="0%"))}function _(){const t=m==null?void 0:m.querySelector(".brd-widget");t&&(t.style.left=w.edge==="left"?"0px":"auto",t.style.right=w.edge==="right"?"0px":"auto",t.style.bottom=`${z(w.verticalOffset,t)}px`)}function ke(t,s){let e=null,i=!1,o=0,r=0,a=0;const n=()=>{e=null,i=!1,t.style.cursor="grab",t.style.transition="all 0.2s ease"},c=d=>{d.pointerType==="mouse"&&d.button!==0||d.target.closest("button, input, a")||(e=d.pointerId,i=!1,o=d.clientX,r=d.clientY,a=window.innerHeight-t.getBoundingClientRect().bottom,t.style.cursor="grabbing",t.style.transition="none",t.setPointerCapture(d.pointerId),d.preventDefault())},g=d=>{if(e!==d.pointerId)return;const E=d.clientX-o,S=r-d.clientY;if(!i&&Math.hypot(E,S)>=ge&&(i=!0),!i)return;const l=z(a+S,t);t.style.left=w.edge==="left"?"0px":"auto",t.style.right=w.edge==="right"?"0px":"auto",t.style.bottom=`${l}px`},p=async d=>{if(e!==d.pointerId)return;const E=i;if(t.hasPointerCapture(d.pointerId)&&t.releasePointerCapture(d.pointerId),E){const S=t.getBoundingClientRect();w={edge:d.clientX<window.innerWidth/2?"left":"right",verticalOffset:z(window.innerHeight-S.bottom,t)},_(),await fe(s,w)}else I==null||I();n()},k=d=>{e===d.pointerId&&(t.hasPointerCapture(d.pointerId)&&t.releasePointerCapture(d.pointerId),_(),n())};return t.addEventListener("pointerdown",c),t.addEventListener("pointermove",g),t.addEventListener("pointerup",p),t.addEventListener("pointercancel",k),t.style.cursor="grab",()=>{t.removeEventListener("pointerdown",c),t.removeEventListener("pointermove",g),t.removeEventListener("pointerup",p),t.removeEventListener("pointercancel",k)}}function z(t,s){const e=Math.max(0,window.innerHeight-s.getBoundingClientRect().height-8);return Math.max(0,Math.min(t,e))}const Se=`
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── Fullscreen backdrop ─────────────────────────── */
   .brd-fullscreen {
     position: fixed;
     inset: 0;
@@ -18,7 +29,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     color: #3a2e1e;
   }
 
-  /* ── Notebook card ───────────────────────────────── */
   .brd-card {
     background: #fdf8ee;
     border: 3px solid #3a2e1e;
@@ -30,7 +40,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     pointer-events: all;
     animation: brd-slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     font-family: 'Patrick Hand', 'Caveat', cursive, sans-serif;
-    /* Lined paper effect */
     background-image: repeating-linear-gradient(
       to bottom,
       transparent,
@@ -61,7 +70,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     margin-bottom: 16px;
   }
 
-  /* ── Buttons ─────────────────────────────────────── */
   .brd-btn-row {
     display: flex;
     gap: 10px;
@@ -99,6 +107,7 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     color: #7b2d8b;
     box-shadow: 2px 2px 0 #7b2d8b;
   }
+
   .brd-btn-primary:hover { box-shadow: 3px 3px 0 #7b2d8b; }
 
   .brd-btn-success {
@@ -107,6 +116,7 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     color: #2e7d32;
     box-shadow: 2px 2px 0 #2e7d32;
   }
+
   .brd-btn-success:hover { box-shadow: 3px 3px 0 #2e7d32; }
 
   .brd-btn-ghost {
@@ -115,6 +125,7 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     border-color: #c8b89a;
     box-shadow: 2px 2px 0 #c8b89a;
   }
+
   .brd-btn-ghost:hover { box-shadow: 3px 3px 0 #c8b89a; }
 
   .brd-btn-danger {
@@ -123,16 +134,18 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     border-color: #c0392b;
     box-shadow: 2px 2px 0 #c0392b;
   }
+
   .brd-btn-danger:hover { box-shadow: 3px 3px 0 #c0392b; }
 
-  /* ── Floating widget (cooked meter pill) ─────── */
   .brd-widget {
     position: fixed;
     bottom: 20px;
     right: 20px;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 132px;
     padding: 8px 14px;
     background: #fdf8ee;
     border: 2.5px solid #3a2e1e;
@@ -142,7 +155,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     z-index: 999998;
     font-family: 'Patrick Hand', 'Caveat', cursive, -apple-system, sans-serif;
     animation: brd-slideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-    cursor: default;
     user-select: none;
     transition: all 0.2s ease;
   }
@@ -150,6 +162,22 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
   .brd-widget:hover {
     transform: translate(-1px, -1px);
     box-shadow: 4px 4px 0 #3a2e1e;
+  }
+
+  .brd-widget-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brd-widget-pack {
+    width: 100%;
+  }
+
+  .brd-widget-pack-label {
+    font-size: 10px;
+    color: #7a6a50;
+    margin-bottom: 3px;
   }
 
   .brd-widget-emoji {
@@ -173,6 +201,7 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     padding: 2px 7px;
     border-radius: 4px;
     min-width: 28px;
+    margin-left: auto;
     text-align: center;
     font-family: 'Caveat', cursive;
     border: 1.5px solid currentColor;
@@ -182,7 +211,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
   .brd-score-medium { background: #fff3e0; color: #e65100; }
   .brd-score-cooked { background: #fdecea; color: #c0392b; }
 
-  /* ── Pack progress bar ───────────────────────── */
   .brd-pack-bar {
     width: 100%;
     height: 8px;
@@ -199,7 +227,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     transition: width 0.5s ease;
   }
 
-  /* ── Timer ────────────────────────────────────── */
   .brd-timer {
     font-family: 'Caveat', cursive;
     font-size: 56px;
@@ -210,7 +237,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     margin: 12px 0;
   }
 
-  /* ── Vibe grid ───────────────────────────────── */
   .brd-vibe-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -252,7 +278,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     color: #7a6a50;
   }
 
-  /* ── Tips ─────────────────────────────────────── */
   .brd-tips {
     display: flex;
     flex-direction: column;
@@ -270,7 +295,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     color: #7a6a50;
   }
 
-  /* ── Video container ─────────────────────────── */
   .brd-video-wrap {
     width: 100%;
     max-width: 480px;
@@ -300,7 +324,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     text-underline-offset: 4px;
   }
 
-  /* ── Animations ──────────────────────────────── */
   @keyframes brd-fadeIn {
     from { opacity: 0; }
     to   { opacity: 1; }
@@ -321,7 +344,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     50% { opacity: 0.5; }
   }
 
-  /* ── Zen / Touch Grass slideshow ─────────────────── */
   .brd-zen-bg {
     background: #000;
     flex-direction: row;
@@ -348,7 +370,7 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
   }
 
   .brd-zen-webcam {
-    transform: scaleX(-1); /* mirror effect */
+    transform: scaleX(-1);
   }
 
   .brd-zen-caption {
@@ -367,7 +389,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     pointer-events: none;
   }
 
-  /* Zen sidebar — keep dark so the cat photos pop */
   .brd-zen-card {
     width: 260px;
     flex-shrink: 0;
@@ -408,7 +429,6 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     to   { opacity: 1; }
   }
 
-  /* ── Dark mode ──────────────────────────────────── */
   :host(.brd-dark) .brd-fullscreen {
     background: rgba(26, 26, 26, 0.95);
   }
@@ -429,7 +449,8 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     text-decoration-color: #e74c3c;
   }
 
-  :host(.brd-dark) .brd-card p {
+  :host(.brd-dark) .brd-card p,
+  :host(.brd-dark) .brd-widget-pack-label {
     color: #a09080;
   }
 
@@ -514,55 +535,41 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
     border-color: #e8e0d0;
     box-shadow: 5px 5px 0 #000;
   }
-`;function p(t){return new Promise(o=>{chrome.runtime.sendMessage(t,e=>{chrome.runtime.lastError?o({success:!1,error:chrome.runtime.lastError.message}):o(e??{success:!1,error:"No response"})})})}class ge{constructor(){h(this,"settings");h(this,"session");h(this,"enabled",!1);h(this,"tickTimer",null);h(this,"lastSignalAt",0);h(this,"lastActivityAt",0);h(this,"scrollCount",0);h(this,"swipeCount",0);h(this,"maxCookedShown",!1);h(this,"builtDifferentDismissed",!1)}async init(){var o;try{const e=await p({type:"GET_SETTINGS"});if(!e.success)return;if(this.settings=e.data,!this.settings.masterEnabled||!((o=this.settings.sites[this.site])!=null&&o.enabled)){console.log(`[brainrot detox] Disabled for ${this.site}`);return}const s=await this.getCurrentTabId();let i=await p({type:"GET_SESSION",payload:{tabId:s}});i.data?this.session=i.data:(this.session={site:this.site,tabId:s,startedAt:Date.now(),cookedScore:0,cookedStatus:"Based",lastInterventionAt:0,packState:{...g},touchGrass:{...k},vibeIntent:this.settings.vibeCheck.activeIntent,itemsConsumed:0,scrollEvents:0},await p({type:"UPDATE_SESSION",payload:{tabId:s,patch:this.session}})),this.enabled=!0,console.log(`[brainrot detox] ${this.site} adapter initialized`),this.mountCookedWidget(),this.setupObservers(),this.lastActivityAt=Date.now(),this.scheduleNextTick(),this.session.touchGrass.active&&this.session.touchGrass.endsAt>Date.now()&&this.showTouchGrassOverlay()}catch(e){console.error(`[brainrot detox] Init error for ${this.site}:`,e)}}destroy(){this.enabled=!1,this.tickTimer&&clearTimeout(this.tickTimer),this.removeAllOverlays()}scheduleNextTick(){this.tickTimer&&clearTimeout(this.tickTimer);const i=Date.now()-this.lastActivityAt<Z?Y:K;this.tickTimer=window.setTimeout(()=>{this.tick(),this.scheduleNextTick()},i)}recordActivity(){this.lastActivityAt=Date.now()}async tick(){if(!this.enabled)return;const o=Date.now(),e=this.getNewItemsSinceLastTick();this.session.itemsConsumed+=e,this.session.scrollEvents+=this.scrollCount;const s=this.scrollCount>0||e>0||this.swipeCount>0;s&&(this.lastSignalAt=o);const i=this.lastSignalAt===0?0:o-this.lastSignalAt;if(this.builtDifferentDismissed&&s){this.builtDifferentDismissed=!1,this.scrollCount=0,this.swipeCount=0,this.onBuiltDifferentDenied();return}let a;if(this.session.packState.active)a=this.session.cookedScore;else if(this.site==="shorts")a=ee(this.session.cookedScore,this.swipeCount,this.session.vibeIntent,i);else{const d=(o-this.session.startedAt)/6e4,n=J(d,this.settings.cooked.sessionCapMinutes,this.session.scrollEvents,this.session.itemsConsumed);a=Q(this.session.cookedScore,n,s,i,this.session.vibeIntent)}this.scrollCount=0,this.swipeCount=0,this.session.cookedScore=a,this.session.cookedStatus=te(a,this.settings.cooked.thresholds),this.session.packState.active&&(this.session.packState=ie(this.session.packState,e),ae(this.session.packState,o)&&this.onPackComplete()),this.session.packState.active||(oe(a)?this.maxCookedShown||(this.maxCookedShown=!0,this.onMaxCooked()):(a<95&&(this.maxCookedShown=!1),a>=this.session.cookedScore&&se(a,this.session.lastInterventionAt,this.settings.cooked.thresholds,o)&&(this.session.lastInterventionAt=o,this.onIntervention()))),this.updateCookedWidget(this.session.cookedScore,this.session.cookedStatus);const r=this.session.tabId;await p({type:"UPDATE_SESSION",payload:{tabId:r,patch:this.session}})}async getCurrentTabId(){return new Promise(o=>{const e=Math.floor(Math.random()*1e6);p({type:"GET_CURRENT_TAB"}).then(s=>{var i;o(((i=s.data)==null?void 0:i.id)??e)})})}onIntervention(){p({type:"LOG_EVENT",payload:{eventType:"intervention"}}),this.showInterventionOverlay()}onMaxCooked(){this.session.lastInterventionAt=Date.now(),p({type:"LOG_EVENT",payload:{eventType:"intervention"}}),this.showSkyrimOverlay("Your brain is absolutely cooked (x_x)")}onPackComplete(){this.session.packState={...g},this.maxCookedShown=!1,p({type:"END_PACK",payload:{tabId:this.session.tabId}}),this.showSkyrimOverlay("[#] Pack Complete! Time to touch grass.")}onBuiltDifferentDenied(){this.showBuiltDifferentDeniedOverlay()}async startPack(o,e){await p({type:"START_PACK",payload:{tabId:this.session.tabId,mode:o,limit:e}}),this.session.packState={active:!0,mode:o,limit:e,consumed:0,startedAt:Date.now()},this.session.cookedScore=0,this.session.cookedStatus="Based",this.maxCookedShown=!1,this.builtDifferentDismissed=!1}async startTouchGrass(o){await p({type:"START_TOUCH_GRASS",payload:{tabId:this.session.tabId,minutes:o}}),this.session.touchGrass={active:!0,endsAt:Date.now()+o*6e4,bypassCount:0},this.showTouchGrassOverlay()}async endTouchGrass(){await p({type:"END_TOUCH_GRASS",payload:{tabId:this.session.tabId}}),this.session.touchGrass={...k},this.session.cookedScore=0,this.session.cookedStatus="Based",this.maxCookedShown=!1,this.removeAllOverlays()}async bypassTouchGrass(){this.session.touchGrass.bypassCount++,p({type:"LOG_EVENT",payload:{eventType:"bypass"}}),await this.endTouchGrass()}setVibeIntent(o){this.session.vibeIntent=o,p({type:"UPDATE_SESSION",payload:{tabId:this.session.tabId,patch:{vibeIntent:o}}}),p({type:"LOG_EVENT",payload:{eventType:"vibe_check"}})}}class ye extends ge{constructor(){super(...arguments);h(this,"site","shorts");h(this,"itemsSinceLastTick",0);h(this,"lastVideoId","");h(this,"urlObserver",null);h(this,"onScroll",()=>{this.scrollCount++,this.recordActivity()});h(this,"onWheel",e=>{Math.abs(e.deltaY)>20&&(this.swipeCount++,this.recordActivity())});h(this,"onKeyDown",e=>{(e.key==="ArrowDown"||e.key==="j")&&(this.swipeCount++,this.itemsSinceLastTick++,this.recordActivity())})}getShortsVideo(){return document.querySelector("ytd-shorts video")??document.querySelector(".html5-main-video")??document.querySelector("video.video-stream")??null}freezeFeed(){const e=this.getShortsVideo();e&&!e.paused&&e.pause()}thawFeed(){const e=this.getShortsVideo();e&&e.paused&&e.play().catch(()=>{})}setupObservers(){window.addEventListener("scroll",this.onScroll,{passive:!0}),window.addEventListener("wheel",this.onWheel,{passive:!0}),window.addEventListener("keydown",this.onKeyDown,{passive:!0}),this.watchUrlChanges(),this.watchShortsContainer();let e=0;window.addEventListener("touchstart",s=>{var i;e=((i=s.touches[0])==null?void 0:i.clientY)??0},{passive:!0}),window.addEventListener("touchend",s=>{var a;const i=e-(((a=s.changedTouches[0])==null?void 0:a.clientY)??0);Math.abs(i)>50&&(this.swipeCount++,this.itemsSinceLastTick++,this.recordActivity())},{passive:!0}),chrome.runtime.onMessage.addListener((s,i,a)=>{var r,d,n;return s.type==="END_TOUCH_GRASS"?(this.session.touchGrass={active:!1,endsAt:0,bypassCount:0},b("skyrim"),b("touchgrass"),this.thawFeed(),a({success:!0}),!1):s.type==="TRIGGER_TOUCH_GRASS"?(this.startTouchGrass(((r=s.payload)==null?void 0:r.minutes)??5),a({success:!0}),!1):s.type==="TRIGGER_PACK"?(this.startPack(((d=s.payload)==null?void 0:d.mode)??"items",((n=s.payload)==null?void 0:n.limit)??10),a({success:!0}),!1):(s.type==="TRIGGER_VIBE_CHECK"&&(this.showVibeCheckOverlay(),a({success:!0})),!1)})}watchUrlChanges(){setInterval(()=>{const e=window.location.pathname.match(/\/shorts\/([^/?]+)/),s=(e==null?void 0:e[1])??"";s&&s!==this.lastVideoId&&(this.lastVideoId=s,this.itemsSinceLastTick++,this.swipeCount++,this.recordActivity())},500)}watchShortsContainer(){const e=new MutationObserver(()=>{const i=window.location.pathname.match(/\/shorts\/([^/?]+)/),a=(i==null?void 0:i[1])??"";a&&a!==this.lastVideoId&&(this.lastVideoId=a,this.itemsSinceLastTick++)}),s=()=>{const i=document.querySelector("ytd-shorts")||document.querySelector("#shorts-container")||document.body;e.observe(i,{childList:!0,subtree:!0})};document.readyState==="complete"?s():window.addEventListener("load",s),this.urlObserver=e}getNewItemsSinceLastTick(){const e=this.itemsSinceLastTick;return this.itemsSinceLastTick=0,e}async mountCookedWidget(){await ue(this.site),this.updateCookedWidget(this.session.cookedScore,this.session.cookedStatus)}updateCookedWidget(e,s){const i=j(s),a=s==="Based"?"brd-score-based":s==="Medium Cooked"?"brd-score-medium":"brd-score-cooked";let r="";if(this.session.packState.active){const n=re(this.session.packState);r=`
-        <div style="width:100%;margin-top:6px;">
-          <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${this.session.packState.mode==="time"&&n.timeRemaining?`[#] Pack: ${n.timeRemaining}`:`[#] Pack: ${n.current}/${n.total}`}</div>
-          <div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${n.percent}%"></div></div>
-        </div>
-      `}if(document.querySelector('#brd-overlay-host [data-overlay="widget"] .brd-widget'))he(e,s,r);else{const c=C("widget",`
-        <div class="brd-widget">
-          <span class="brd-widget-emoji">${i.emoji}</span>
-          <span class="brd-widget-label">${i.label}</span>
-          <span class="brd-widget-score ${a}">${e}</span>
-          ${r}
-        </div>
-      `).querySelector(".brd-widget");c&&me(c,this.site)}}showInterventionOverlay(){var i,a,r;const e=j(this.session.cookedStatus),s=C("intervention",`
+`;function b(t){return new Promise(s=>{chrome.runtime.sendMessage(t,e=>{chrome.runtime.lastError?s({success:!1,error:chrome.runtime.lastError.message}):s(e??{success:!1,error:"No response"})})})}function Ce(t,s=1){return t.active?{...t,consumed:t.consumed+s}:t}function Te(t,s=Date.now()){return t.active?t.mode==="items"?t.consumed>=t.limit:t.mode==="time"?(s-t.startedAt)/6e4>=t.limit:!1:!1}function Ee(t,s=Date.now()){if(!t.active)return{current:0,total:0,percent:0};if(t.mode==="items")return{current:t.consumed,total:t.limit,percent:Math.min(100,Math.round(t.consumed/t.limit*100))};const e=(s-t.startedAt)/6e4,i=Math.max(0,t.limit-e),o=Math.floor(i),r=Math.floor((i-o)*60);return{current:Math.round(e),total:t.limit,percent:Math.min(100,Math.round(e/t.limit*100)),timeRemaining:`${String(o).padStart(2,"0")}:${String(r).padStart(2,"0")}`}}const R="brd:locationchange";class Ie{constructor(){h(this,"settings");h(this,"session");h(this,"enabled",!1);h(this,"lastSignalAt",0);h(this,"lastActivityAt",0);h(this,"scrollCount",0);h(this,"swipeCount",0);h(this,"maxCookedShown",!1);h(this,"builtDifferentDismissed",!1);h(this,"tickTimer",null);h(this,"cleanupFns",[]);h(this,"velocitySamples",[])}async init(){var s;this.enabled&&this.destroy();try{const e=await b({type:"GET_SETTINGS"});if(!e.success)return;if(this.settings=e.data,!this.settings.masterEnabled||!((s=this.settings.sites[this.site])!=null&&s.enabled)){console.log(`[brainrot detox] Disabled for ${this.site}`);return}const i=await this.getCurrentTabId(),o=await b({type:"GET_SESSION",payload:{tabId:i}});o.data?this.session=o.data:(this.session={site:this.site,tabId:i,startedAt:Date.now(),cookedScore:0,cookedStatus:"Based",lastInterventionAt:0,packState:{...y},touchGrass:{...T},vibeIntent:this.settings.vibeCheck.activeIntent,itemsConsumed:0,scrollEvents:0},await b({type:"UPDATE_SESSION",payload:{tabId:i,patch:this.session}})),this.enabled=!0,this.lastSignalAt=0,this.lastActivityAt=Date.now(),this.velocitySamples=[],await xe(this.site),this.mountCookedWidget(),this.setupObservers(),this.scheduleNextTick(),this.session.touchGrass.active&&this.session.touchGrass.endsAt>Date.now()&&this.showTouchGrassOverlay(),console.log(`[brainrot detox] ${this.site} adapter initialized`)}catch(e){console.error(`[brainrot detox] Init error for ${this.site}:`,e)}}destroy(){for(this.enabled=!1,this.tickTimer!==null&&(clearTimeout(this.tickTimer),this.tickTimer=null);this.cleanupFns.length>0;){const s=this.cleanupFns.pop();try{s==null||s()}catch(e){console.warn(`[brainrot detox] Cleanup error for ${this.site}:`,e)}}this.velocitySamples=[],this.removeAllOverlays()}scheduleNextTick(){if(!this.enabled)return;this.tickTimer!==null&&clearTimeout(this.tickTimer);const s=Date.now()-this.lastActivityAt<ie?te:se;this.tickTimer=window.setTimeout(async()=>{await this.tick(),this.scheduleNextTick()},s)}recordActivity(s=Date.now()){this.lastActivityAt=s}recordSignalUnits(s,e=Date.now()){s<=0||(this.velocitySamples.push({at:e,units:s}),this.lastSignalAt=e,this.recordActivity(e),this.pruneVelocitySamples(e))}recordSuccessfulNavigation(s=1,e=Date.now()){s<=0||(this.swipeCount+=s,this.recordSignalUnits(s,e))}getVelocityMultiplier(s=Date.now()){this.pruneVelocitySamples(s);const i=this.velocitySamples.reduce((o,r)=>o+r.units,0)/(N/1e3);return Math.min(re,1+oe*Math.pow(i,1.5))}addCleanup(s){this.cleanupFns.push(s)}registerEventListener(s,e,i,o){s.addEventListener(e,i,o),this.addCleanup(()=>s.removeEventListener(e,i,o))}registerMutationObserver(s,e,i){const o=new MutationObserver(i);return o.observe(s,e),this.addCleanup(()=>o.disconnect()),o}registerInterval(s,e){const i=window.setInterval(s,e);return this.addCleanup(()=>clearInterval(i)),i}registerRuntimeMessageListener(s){chrome.runtime.onMessage.addListener(s),this.addCleanup(()=>chrome.runtime.onMessage.removeListener(s))}registerLocationChangeListener(s){const e=window;let i=e.__brdLocationChangePatch;if(!i){const o=()=>window.dispatchEvent(new Event(R)),r=history.pushState,a=history.replaceState;history.pushState=function(...n){const c=r.apply(history,n);return o(),c},history.replaceState=function(...n){const c=a.apply(history,n);return o(),c},window.addEventListener("popstate",o),i={refCount:0,popstateListener:o,originalPushState:r,originalReplaceState:a},e.__brdLocationChangePatch=i}i.refCount++,window.addEventListener(R,s),this.addCleanup(()=>{window.removeEventListener(R,s);const o=e.__brdLocationChangePatch;o&&(o.refCount--,!(o.refCount>0)&&(history.pushState=o.originalPushState,history.replaceState=o.originalReplaceState,window.removeEventListener("popstate",o.popstateListener),delete e.__brdLocationChangePatch))})}buildPackDisplay(){if(!this.session.packState.active)return null;const s=Ee(this.session.packState);return{label:this.session.packState.mode==="time"&&s.timeRemaining?`[#] Pack: ${s.timeRemaining}`:`[#] Pack: ${s.current}/${s.total}`,percent:s.percent}}renderCookedWidget(s,e){ve({siteKey:this.site,score:s,status:e,pack:this.buildPackDisplay(),onActivate:()=>this.showVibeCheckOverlay()})}getGeneralVelocityUnits(s){return s+this.scrollCount*.25}computeGeneralBurstBonus(s,e){return s<=0?0:Math.max(0,e-1)*Math.min(12,s)*.6}resetMomentum(){this.velocitySamples=[],this.lastSignalAt=0}async tick(){if(!this.enabled)return;const s=Date.now(),e=this.session.cookedScore,i=this.getNewItemsSinceLastTick();this.session.itemsConsumed+=i,this.session.scrollEvents+=this.scrollCount;const o=this.scrollCount>0||i>0||this.swipeCount>0,r=this.lastSignalAt===0?0:s-this.lastSignalAt;if(this.builtDifferentDismissed&&o){this.builtDifferentDismissed=!1,this.scrollCount=0,this.swipeCount=0,this.onBuiltDifferentDenied();return}let a=e;if(this.session.packState.active)a=e;else if(this.site==="shorts"){const n=i*this.getVelocityMultiplier(s);a=ce(e,n,this.session.vibeIntent,r)}else{const n=this.getGeneralVelocityUnits(i);n>0&&this.recordSignalUnits(n,s);const c=(s-this.session.startedAt)/6e4,g=ne(c,this.settings.cooked.sessionCapMinutes,this.session.scrollEvents,this.session.itemsConsumed),p=this.getVelocityMultiplier(s),k=de(e,g,o,r,this.session.vibeIntent);a=Math.min(100,k+this.computeGeneralBurstBonus(n,p))}this.scrollCount=0,this.swipeCount=0,this.session.cookedScore=a,this.session.cookedStatus=le(a,this.settings.cooked.thresholds),this.session.packState.active&&(this.session.packState=Ce(this.session.packState,i),Te(this.session.packState,s)&&this.onPackComplete()),this.session.packState.active||(ue(a)?this.maxCookedShown||(this.maxCookedShown=!0,this.onMaxCooked()):(a<95&&(this.maxCookedShown=!1),a>=e&&he(a,this.session.lastInterventionAt,this.settings.cooked.thresholds,s)&&(this.session.lastInterventionAt=s,this.onIntervention()))),this.updateCookedWidget(this.session.cookedScore,this.session.cookedStatus),await b({type:"UPDATE_SESSION",payload:{tabId:this.session.tabId,patch:this.session}})}onIntervention(){b({type:"LOG_EVENT",payload:{eventType:"intervention"}}),this.showInterventionOverlay()}onMaxCooked(){this.session.lastInterventionAt=Date.now(),b({type:"LOG_EVENT",payload:{eventType:"intervention"}}),this.showSkyrimOverlay("Your brain is absolutely cooked (x_x)")}onPackComplete(){this.session.packState={...y},this.maxCookedShown=!1,b({type:"END_PACK",payload:{tabId:this.session.tabId}}),this.showSkyrimOverlay("[#] Pack Complete! Time to touch grass."),this.updateCookedWidget(this.session.cookedScore,this.session.cookedStatus)}onBuiltDifferentDenied(){this.showBuiltDifferentDeniedOverlay()}async startPack(s,e){await b({type:"START_PACK",payload:{tabId:this.session.tabId,mode:s,limit:e}}),this.session.packState={active:!0,mode:s,limit:e,consumed:0,startedAt:Date.now()},this.session.cookedScore=0,this.session.cookedStatus="Based",this.maxCookedShown=!1,this.builtDifferentDismissed=!1,this.resetMomentum(),this.updateCookedWidget(this.session.cookedScore,this.session.cookedStatus)}async startTouchGrass(s){await b({type:"START_TOUCH_GRASS",payload:{tabId:this.session.tabId,minutes:s}}),this.session.touchGrass={active:!0,endsAt:Date.now()+s*6e4,bypassCount:0},this.showTouchGrassOverlay()}async endTouchGrass(){await b({type:"END_TOUCH_GRASS",payload:{tabId:this.session.tabId}}),this.session.touchGrass={...T},this.session.cookedScore=0,this.session.cookedStatus="Based",this.maxCookedShown=!1,this.resetMomentum(),this.removeAllOverlays(),this.mountCookedWidget()}async bypassTouchGrass(){this.session.touchGrass.bypassCount++,b({type:"LOG_EVENT",payload:{eventType:"bypass"}}),await this.endTouchGrass()}setVibeIntent(s){this.session.vibeIntent=s,b({type:"UPDATE_SESSION",payload:{tabId:this.session.tabId,patch:{vibeIntent:s}}}),b({type:"LOG_EVENT",payload:{eventType:"vibe_check"}})}pruneVelocitySamples(s=Date.now()){this.velocitySamples=this.velocitySamples.filter(e=>s-e.at<=N)}async getCurrentTabId(){return new Promise(s=>{const e=Math.floor(Math.random()*1e6);b({type:"GET_CURRENT_TAB"}).then(i=>{var o;s(((o=i.data)==null?void 0:o.id)??e)})})}}class Me extends Ie{constructor(){super(...arguments);h(this,"site","shorts");h(this,"itemsSinceLastTick",0);h(this,"lastVideoId","");h(this,"handleRuntimeMessage",(e,i,o)=>{var r,a,n;return e.type==="END_TOUCH_GRASS"?(this.session.touchGrass={active:!1,endsAt:0,bypassCount:0},u("skyrim"),u("touchgrass"),this.thawFeed(),o({success:!0}),!1):e.type==="TRIGGER_TOUCH_GRASS"?(this.startTouchGrass(((r=e.payload)==null?void 0:r.minutes)??5),o({success:!0}),!1):e.type==="TRIGGER_PACK"?(this.startPack(((a=e.payload)==null?void 0:a.mode)??"items",((n=e.payload)==null?void 0:n.limit)??10),o({success:!0}),!1):(e.type==="TRIGGER_VIBE_CHECK"&&(this.showVibeCheckOverlay(),o({success:!0})),!1)})}getShortsVideo(){return document.querySelector("ytd-shorts video")??document.querySelector(".html5-main-video")??document.querySelector("video.video-stream")??null}freezeFeed(){const e=this.getShortsVideo();e&&!e.paused&&e.pause()}thawFeed(){const e=this.getShortsVideo();e&&e.paused&&e.play().catch(()=>{})}setupObservers(){this.registerEventListener(window,"scroll",()=>{this.scrollCount++,this.recordActivity()},{passive:!0}),this.registerEventListener(window,"wheel",r=>{Math.abs(r.deltaY)>20&&(this.scrollCount++,this.recordActivity())},{passive:!0}),this.registerEventListener(window,"keydown",r=>{const a=r;(a.key==="ArrowDown"||a.key==="j")&&(this.scrollCount++,this.recordActivity())},{passive:!0});let e=0;this.registerEventListener(window,"touchstart",r=>{var a;e=((a=r.touches[0])==null?void 0:a.clientY)??0},{passive:!0}),this.registerEventListener(window,"touchend",r=>{var n;const a=e-(((n=r.changedTouches[0])==null?void 0:n.clientY)??0);Math.abs(a)>50&&(this.scrollCount++,this.recordActivity())},{passive:!0});const i=()=>{const r=window.location.pathname.match(/\/shorts\/([^/?]+)/),a=(r==null?void 0:r[1])??"";if(a){if(!this.lastVideoId){this.lastVideoId=a;return}a!==this.lastVideoId&&(this.lastVideoId=a,this.itemsSinceLastTick++,this.recordSuccessfulNavigation())}};this.registerLocationChangeListener(i),this.registerInterval(i,250),i();const o=()=>{const r=document.body??document.documentElement;this.registerMutationObserver(r,{childList:!0,subtree:!0},()=>i())};document.readyState==="complete"?o():this.registerEventListener(window,"load",o,{once:!0}),this.registerRuntimeMessageListener(this.handleRuntimeMessage)}getNewItemsSinceLastTick(){const e=this.itemsSinceLastTick;return this.itemsSinceLastTick=0,e}mountCookedWidget(){this.renderCookedWidget(this.session.cookedScore,this.session.cookedStatus)}updateCookedWidget(e,i){this.renderCookedWidget(e,i)}showInterventionOverlay(){var o,r,a;const e=F(this.session.cookedStatus),i=L("intervention",`
       <div class="brd-fullscreen">
         <div class="brd-card">
           <h2>${e.emoji} ${e.label}!</h2>
-          <p>Your scrolling score just hit ${this.session.cookedScore}. Your brain is getting crispy. Time to make a choice:</p>
+          <p>Your scrolling score just hit ${Math.round(this.session.cookedScore)}. Your brain is getting crispy. Time to make a choice:</p>
           <div class="brd-btn-row">
-            <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going [->]</button>
-            <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-            <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass</button>
+            <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
+            <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+            <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
           </div>
         </div>
       </div>
-    `);(i=s.querySelector("[data-action='dismiss']"))==null||i.addEventListener("click",()=>b("intervention")),(a=s.querySelector("[data-action='pack']"))==null||a.addEventListener("click",()=>{b("intervention"),this.startPack("items",10)}),(r=s.querySelector("[data-action='grass']"))==null||r.addEventListener("click",()=>{b("intervention"),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)})}showBuiltDifferentDeniedOverlay(){var s,i,a;this.freezeFeed();const e=C("denied",`
+    `);(o=i.querySelector("[data-action='dismiss']"))==null||o.addEventListener("click",()=>u("intervention")),(r=i.querySelector("[data-action='pack']"))==null||r.addEventListener("click",()=>{u("intervention"),this.startPack("items",10)}),(a=i.querySelector("[data-action='grass']"))==null||a.addEventListener("click",()=>{u("intervention"),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)})}showBuiltDifferentDeniedOverlay(){var i,o,r;this.freezeFeed();const e=L("denied",`
       <div class="brd-fullscreen">
         <div class="brd-card">
           <h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2>
           <p style="text-align:center;">You thought you could just scroll away? Pick one.</p>
           <div class="brd-btn-row" style="justify-content:center;">
-            <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-            <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-            <button class="brd-btn brd-btn-ghost" data-action="vibe">[?] Vibe Check</button>
+            <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+            <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+            <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
           </div>
         </div>
       </div>
-    `);(s=e.querySelector("[data-action='grass']"))==null||s.addEventListener("click",()=>{b("denied"),this.thawFeed(),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)}),(i=e.querySelector("[data-action='pack']"))==null||i.addEventListener("click",()=>{b("denied"),this.thawFeed(),this.startPack("items",10)}),(a=e.querySelector("[data-action='vibe']"))==null||a.addEventListener("click",()=>{b("denied"),this.thawFeed(),this.showVibeCheckOverlay()})}showSkyrimOverlay(e){var r,d,n;const s=chrome.runtime.getURL("assets/skyrim-skeleton.mp4");this.freezeFeed();const i=C("skyrim",`
+    `);(i=e.querySelector("[data-action='grass']"))==null||i.addEventListener("click",()=>{u("denied"),this.thawFeed(),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)}),(o=e.querySelector("[data-action='pack']"))==null||o.addEventListener("click",()=>{u("denied"),this.thawFeed(),this.startPack("items",10)}),(r=e.querySelector("[data-action='vibe']"))==null||r.addEventListener("click",()=>{u("denied"),this.thawFeed(),this.showVibeCheckOverlay()})}showSkyrimOverlay(e){var a,n,c;const i=chrome.runtime.getURL("assets/skyrim-skeleton.mp4");this.freezeFeed();const o=L("skyrim",`
       <div class="brd-fullscreen">
-        <div class="brd-video-wrap">
-          <video playsinline></video>
-        </div>
+        <div class="brd-video-wrap"><video playsinline></video></div>
         <div class="brd-message">${e}</div>
         <div class="brd-btn-row">
-          <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-          <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-          <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different [+]</button>
+          <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+          <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+          <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different</button>
         </div>
       </div>
-    `),a=i.querySelector("video");a&&(a.src=s,a.load(),a.play().catch(()=>{})),(r=i.querySelector("[data-action='grass']"))==null||r.addEventListener("click",()=>{b("skyrim"),this.thawFeed(),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)}),(d=i.querySelector("[data-action='pack']"))==null||d.addEventListener("click",()=>{b("skyrim"),this.thawFeed(),this.startPack("items",10)}),(n=i.querySelector("[data-action='dismiss']"))==null||n.addEventListener("click",()=>{b("skyrim"),this.thawFeed(),this.builtDifferentDismissed=!0})}showTouchGrassOverlay(){var $;const e=this.session.touchGrass.endsAt,s=F.sort(()=>Math.random()-.5).slice(0,3);this.freezeFeed();const a=[...["https://cataas.com/cat?width=900&height=700&t=1","https://cataas.com/cat?width=900&height=700&t=2","https://cataas.com/cat?width=900&height=700&t=3","https://cataas.com/cat?width=900&height=700&t=4","https://cataas.com/cat?width=900&height=700&t=5","https://cataas.com/cat?width=900&height=700&t=6","https://cataas.com/cat?width=900&height=700&t=7","https://cataas.com/cat?width=900&height=700&t=8","https://cataas.com/cat?width=900&height=700&t=9","https://cataas.com/cat?width=900&height=700&t=10","WEBCAM","https://cataas.com/cat?width=900&height=700&t=11","https://cataas.com/cat?width=900&height=700&t=12","https://cataas.com/cat?width=900&height=700&t=13","https://cataas.com/cat?width=900&height=700&t=14","https://cataas.com/cat?width=900&height=700&t=15","WEBCAM"]].sort(()=>Math.random()-.5),r=C("touchgrass",`
+    `),r=o.querySelector("video");r&&(r.src=i,r.load(),r.play().catch(()=>{})),(a=o.querySelector("[data-action='grass']"))==null||a.addEventListener("click",()=>{u("skyrim"),this.thawFeed(),this.startTouchGrass(this.settings.touchGrass.defaultMinutes)}),(n=o.querySelector("[data-action='pack']"))==null||n.addEventListener("click",()=>{u("skyrim"),this.thawFeed(),this.startPack("items",10)}),(c=o.querySelector("[data-action='dismiss']"))==null||c.addEventListener("click",()=>{u("skyrim"),this.thawFeed(),this.builtDifferentDismissed=!0})}showTouchGrassOverlay(){var J;const e=this.session.touchGrass.endsAt,i=Z.slice().sort(()=>Math.random()-.5).slice(0,3);this.freezeFeed();const r=[...["https://cataas.com/cat?width=900&height=700&t=1","https://cataas.com/cat?width=900&height=700&t=2","https://cataas.com/cat?width=900&height=700&t=3","https://cataas.com/cat?width=900&height=700&t=4","https://cataas.com/cat?width=900&height=700&t=5","https://cataas.com/cat?width=900&height=700&t=6","https://cataas.com/cat?width=900&height=700&t=7","https://cataas.com/cat?width=900&height=700&t=8","https://cataas.com/cat?width=900&height=700&t=9","https://cataas.com/cat?width=900&height=700&t=10","WEBCAM","https://cataas.com/cat?width=900&height=700&t=11","https://cataas.com/cat?width=900&height=700&t=12","https://cataas.com/cat?width=900&height=700&t=13","https://cataas.com/cat?width=900&height=700&t=14","https://cataas.com/cat?width=900&height=700&t=15","WEBCAM"]].sort(()=>Math.random()-.5),a=L("touchgrass",`
       <div class="brd-fullscreen brd-zen-bg">
         <div class="brd-zen-slide-wrap">
           <img class="brd-zen-img" src="" alt="zen" />
@@ -570,32 +577,28 @@ var ve=Object.defineProperty;var xe=(v,g,k)=>g in v?ve(v,g,{enumerable:!0,config
           <div class="brd-zen-caption"></div>
         </div>
         <div class="brd-zen-card">
-          <div class="brd-zen-header">[*] Touch Grass Mode</div>
+          <div class="brd-zen-header">Touch Grass Mode</div>
           <div class="brd-timer" id="brd-tg-timer">00:00</div>
-          <div class="brd-tips">
-            ${s.map(f=>`<div class="brd-tip">${f}</div>`).join("")}
-          </div>
+          <div class="brd-tips">${i.map(v=>`<div class="brd-tip">${v}</div>`).join("")}</div>
           <div class="brd-btn-row" style="justify-content:center;">
-            <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass (will be logged)</button>
+            <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass</button>
           </div>
         </div>
       </div>
-    `),d=r.querySelector(".brd-zen-img"),n=r.querySelector(".brd-zen-webcam"),c=r.querySelector(".brd-zen-caption");let m=null,y=0;const S=["breathe.","you are here.","it's okay.","look at this.","touch grass.","be present.","slow down.","this is real life.","you look great btw.","hi.","go outside.","drink water."],w=async f=>{const A=a[f%a.length];if(A==="WEBCAM"){if(d.style.display="none",n.style.display="block",c.textContent="hi. this is you. say hi.",!m)try{m=await navigator.mediaDevices.getUserMedia({video:!0,audio:!1}),n.srcObject=m}catch{w(f+1);return}}else n.style.display="none",d.style.display="block",d.src=A,c.textContent=S[Math.floor(Math.random()*S.length)]};w(y);const E=setInterval(()=>{y++,w(y)},4e3);let l=null,T=null;try{l=new AudioContext,T=l.createGain(),T.gain.setValueAtTime(0,l.currentTime),T.gain.linearRampToValueAtTime(.06,l.currentTime+2),T.connect(l.destination);const f=[110,165,220];f.forEach((A,O)=>{const I=l.createOscillator(),M=l.createGain();I.type="sine",I.frequency.setValueAtTime(A,l.currentTime),M.gain.setValueAtTime(1/f.length,l.currentTime),I.connect(M),M.connect(T),I.start();const G=l.createOscillator(),P=l.createGain();G.frequency.setValueAtTime(.15+O*.05,l.currentTime),P.gain.setValueAtTime(.015,l.currentTime),G.connect(P),P.connect(M.gain),G.start()})}catch{}const V=r.querySelector("#brd-tg-timer"),N=setInterval(()=>{const f=Math.max(0,e-Date.now()),A=Math.floor(f/6e4),O=Math.floor(f%6e4/1e3);V&&(V.textContent=`${String(A).padStart(2,"0")}:${String(O).padStart(2,"0")}`),f<=0&&(clearInterval(N),clearInterval(E),this.stopZenAudio(l,T),this.stopWebcam(m),this.endTouchGrass(),this.thawFeed(),b("touchgrass"))},1e3);($=r.querySelector("[data-action='bypass']"))==null||$.addEventListener("click",()=>{clearInterval(N),clearInterval(E),this.stopZenAudio(l,T),this.stopWebcam(m),this.bypassTouchGrass(),this.thawFeed(),b("touchgrass")})}stopZenAudio(e,s){if(!(!e||!s))try{s.gain.linearRampToValueAtTime(0,e.currentTime+.5),setTimeout(()=>e.close(),600)}catch{}}stopWebcam(e){e&&e.getTracks().forEach(s=>s.stop())}showVibeCheckOverlay(){var i;const e=W.map(a=>`
-      <div class="brd-vibe-card" data-vibe="${a.id}">
-        <span class="brd-vibe-emoji">${a.emoji}</span>
-        <span class="brd-vibe-label">${a.label}</span>
+    `),n=a.querySelector(".brd-zen-img"),c=a.querySelector(".brd-zen-webcam"),g=a.querySelector(".brd-zen-caption");let p=null,k=0;const d=["breathe.","you are here.","it's okay.","look at this.","touch grass.","be present.","slow down.","this is real life.","you look great btw.","hi.","go outside.","drink water."],E=async v=>{const M=r[v%r.length];if(M==="WEBCAM"){if(n.style.display="none",c.style.display="block",g.textContent="hi. this is you. say hi.",!p)try{p=await navigator.mediaDevices.getUserMedia({video:!0,audio:!1}),c.srcObject=p}catch{await E(v+1)}return}c.style.display="none",n.style.display="block",n.src=M,g.textContent=d[Math.floor(Math.random()*d.length)]};E(k);const S=window.setInterval(()=>{k++,E(k)},4e3);let l=null,C=null;try{l=new AudioContext,C=l.createGain(),C.gain.setValueAtTime(0,l.currentTime),C.gain.linearRampToValueAtTime(.06,l.currentTime+2),C.connect(l.destination);const v=[110,165,220];v.forEach((M,j)=>{const D=l.createOscillator(),O=l.createGain();D.type="sine",D.frequency.setValueAtTime(M,l.currentTime),O.gain.setValueAtTime(1/v.length,l.currentTime),D.connect(O),O.connect(C),D.start();const q=l.createOscillator(),H=l.createGain();q.frequency.setValueAtTime(.15+j*.05,l.currentTime),H.gain.setValueAtTime(.015,l.currentTime),q.connect(H),H.connect(O.gain),q.start()})}catch{l=null,C=null}const X=a.querySelector("#brd-tg-timer"),V=window.setInterval(()=>{const v=Math.max(0,e-Date.now()),M=Math.floor(v/6e4),j=Math.floor(v%6e4/1e3);X&&(X.textContent=`${String(M).padStart(2,"0")}:${String(j).padStart(2,"0")}`),v<=0&&(clearInterval(V),clearInterval(S),this.stopZenAudio(l,C),this.stopWebcam(p),this.endTouchGrass(),this.thawFeed(),u("touchgrass"))},1e3);this.addCleanup(()=>clearInterval(S)),this.addCleanup(()=>clearInterval(V)),(J=a.querySelector("[data-action='bypass']"))==null||J.addEventListener("click",()=>{clearInterval(V),clearInterval(S),this.stopZenAudio(l,C),this.stopWebcam(p),this.bypassTouchGrass(),this.thawFeed(),u("touchgrass")})}showVibeCheckOverlay(){var o;const e=Q.map(r=>`
+      <div class="brd-vibe-card" data-vibe="${r.id}">
+        <span class="brd-vibe-emoji">${r.emoji}</span>
+        <span class="brd-vibe-label">${r.label}</span>
       </div>
-    `).join(""),s=C("vibecheck",`
+    `).join(""),i=L("vibecheck",`
       <div class="brd-fullscreen">
         <div class="brd-card">
-          <h2>[?] Vibe Check</h2>
+          <h2>Vibe Check</h2>
           <p>What are you here for? This adjusts how strict the cooked meter is.</p>
-          <div class="brd-vibe-grid">
-            ${e}
-          </div>
+          <div class="brd-vibe-grid">${e}</div>
           <div class="brd-btn-row" style="justify-content:center;">
             <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
           </div>
         </div>
       </div>
-    `);s.querySelectorAll("[data-vibe]").forEach(a=>{a.addEventListener("click",()=>{const r=a.dataset.vibe;this.setVibeIntent(r),b("vibecheck")})}),(i=s.querySelector("[data-action='skip']"))==null||i.addEventListener("click",()=>{b("vibecheck")})}removeAllOverlays(){be(),this.thawFeed()}}console.log("[brainrot detox] Shorts content script loaded"),new ye().init()})();
+    `);i.querySelectorAll("[data-vibe]").forEach(r=>{r.addEventListener("click",()=>{this.setVibeIntent(r.dataset.vibe),u("vibecheck")})}),(o=i.querySelector("[data-action='skip']"))==null||o.addEventListener("click",()=>u("vibecheck"))}removeAllOverlays(){ye(),this.thawFeed()}stopZenAudio(e,i){if(!(!e||!i))try{i.gain.linearRampToValueAtTime(0,e.currentTime+.5),window.setTimeout(()=>{e.close()},600)}catch{}}stopWebcam(e){e&&e.getTracks().forEach(i=>i.stop())}}console.log("[brainrot detox] Shorts content script loaded"),new Me().init()})();

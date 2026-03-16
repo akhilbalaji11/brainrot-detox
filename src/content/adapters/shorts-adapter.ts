@@ -1,25 +1,47 @@
 import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
 import { getCookedLabel } from "@/core/cooked-meter";
-import { getPackProgress } from "@/core/snack-packs";
-import type { CookedStatus, VibeIntent } from "@/core/types";
-import { initWidgetPosition, setupWidgetDrag, updateWidgetOverlay, removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
+import type { VibeIntent } from "@/core/types";
+import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
-/**
- * YouTube Shorts adapter
- * Monitors swipe-based navigation by watching URL changes and
- * DOM mutations in the Shorts player container.
- */
 export class ShortsAdapter extends BaseAdapter {
   readonly site = "shorts" as const;
+
   private itemsSinceLastTick = 0;
   private lastVideoId = "";
-  private urlObserver: MutationObserver | null = null;
 
-  /* ── Helpers: pause/resume the Shorts player ────────── */
+  private readonly handleRuntimeMessage = (msg: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+    if (msg.type === "END_TOUCH_GRASS") {
+      this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 };
+      removeOverlay("skyrim");
+      removeOverlay("touchgrass");
+      this.thawFeed();
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (msg.type === "TRIGGER_TOUCH_GRASS") {
+      this.startTouchGrass(msg.payload?.minutes ?? 5);
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (msg.type === "TRIGGER_PACK") {
+      this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10);
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (msg.type === "TRIGGER_VIBE_CHECK") {
+      this.showVibeCheckOverlay();
+      sendResponse({ success: true });
+      return false;
+    }
+
+    return false;
+  };
 
   private getShortsVideo(): HTMLVideoElement | null {
-    // YouTube Shorts player video element (outside our shadow DOM)
     return (
       document.querySelector<HTMLVideoElement>("ytd-shorts video") ??
       document.querySelector<HTMLVideoElement>(".html5-main-video") ??
@@ -29,129 +51,87 @@ export class ShortsAdapter extends BaseAdapter {
   }
 
   private freezeFeed() {
-    const v = this.getShortsVideo();
-    if (v && !v.paused) v.pause();
+    const video = this.getShortsVideo();
+    if (video && !video.paused) {
+      video.pause();
+    }
   }
 
   private thawFeed() {
-    const v = this.getShortsVideo();
-    if (v && v.paused) v.play().catch(() => { });
+    const video = this.getShortsVideo();
+    if (video && video.paused) {
+      video.play().catch(() => undefined);
+    }
   }
 
-  /* ── Observers ──────────────────────────────────────── */
-
   protected setupObservers(): void {
-    // Track scroll/swipe events
-    window.addEventListener("scroll", this.onScroll, { passive: true });
-    window.addEventListener("wheel", this.onWheel, { passive: true });
+    this.registerEventListener(window, "scroll", () => {
+      this.scrollCount++;
+      this.recordActivity();
+    }, { passive: true });
 
-    // Keyboard navigation (down arrow = next short)
-    window.addEventListener("keydown", this.onKeyDown, { passive: true });
-
-    // Watch URL changes (Shorts navigation is via popstate / replaceState)
-    this.watchUrlChanges();
-
-    // Watch for new shorts containers appearing
-    this.watchShortsContainer();
-
-    // Touch events for swipe detection on mobile
-    let touchStartY = 0;
-    window.addEventListener("touchstart", (e) => { touchStartY = e.touches[0]?.clientY ?? 0; }, { passive: true });
-    window.addEventListener("touchend", (e) => {
-      const delta = touchStartY - (e.changedTouches[0]?.clientY ?? 0);
-      if (Math.abs(delta) > 50) {
-        this.swipeCount++;
-        this.itemsSinceLastTick++;
+    this.registerEventListener(window, "wheel", (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      if (Math.abs(wheelEvent.deltaY) > 20) {
+        this.scrollCount++;
         this.recordActivity();
       }
     }, { passive: true });
 
-    // Listen for messages from background/popup
-    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-      if (msg.type === "END_TOUCH_GRASS") {
-        this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 };
-        removeOverlay("skyrim");
-        removeOverlay("touchgrass");
-        this.thawFeed();
-        sendResponse({ success: true });
-        return false;
-      }
-      if (msg.type === "TRIGGER_TOUCH_GRASS") {
-        this.startTouchGrass(msg.payload?.minutes ?? 5);
-        sendResponse({ success: true });
-        return false;
-      }
-      if (msg.type === "TRIGGER_PACK") {
-        this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10);
-        sendResponse({ success: true });
-        return false;
-      }
-      if (msg.type === "TRIGGER_VIBE_CHECK") {
-        this.showVibeCheckOverlay();
-        sendResponse({ success: true });
-        return false;
-      }
-      return false;
-    });
-  }
-
-  private onScroll = () => { this.scrollCount++; this.recordActivity(); };
-  private onWheel = (e: WheelEvent) => {
-    if (Math.abs(e.deltaY) > 20) {
-      this.swipeCount++;
-      this.recordActivity();
-    }
-  };
-
-  private onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "ArrowDown" || e.key === "j") {
-      this.swipeCount++;
-      this.itemsSinceLastTick++;
-      this.recordActivity();
-    }
-  };
-
-  private watchUrlChanges() {
-    // Poll for URL changes (YouTube doesn't always fire popstate for Shorts)
-    setInterval(() => {
-      const match = window.location.pathname.match(/\/shorts\/([^/?]+)/);
-      const currentId = match?.[1] ?? "";
-      if (currentId && currentId !== this.lastVideoId) {
-        this.lastVideoId = currentId;
-        this.itemsSinceLastTick++;
-        this.swipeCount++;
+    this.registerEventListener(window, "keydown", (event: Event) => {
+      const keyEvent = event as KeyboardEvent;
+      if (keyEvent.key === "ArrowDown" || keyEvent.key === "j") {
+        this.scrollCount++;
         this.recordActivity();
       }
-    }, 500);
-  }
+    }, { passive: true });
 
-  private watchShortsContainer() {
-    // Watch for shorts player appearing via MutationObserver
-    const observer = new MutationObserver(() => {
+    let touchStartY = 0;
+    this.registerEventListener(window, "touchstart", (event: Event) => {
+      touchStartY = (event as TouchEvent).touches[0]?.clientY ?? 0;
+    }, { passive: true });
+    this.registerEventListener(window, "touchend", (event: Event) => {
+      const delta = touchStartY - ((event as TouchEvent).changedTouches[0]?.clientY ?? 0);
+      if (Math.abs(delta) > 50) {
+        this.scrollCount++;
+        this.recordActivity();
+      }
+    }, { passive: true });
+
+    const detectCurrentShort = () => {
       const match = window.location.pathname.match(/\/shorts\/([^/?]+)/);
       const currentId = match?.[1] ?? "";
-      if (currentId && currentId !== this.lastVideoId) {
+      if (!currentId) return;
+
+      if (!this.lastVideoId) {
+        this.lastVideoId = currentId;
+        return;
+      }
+
+      if (currentId !== this.lastVideoId) {
         this.lastVideoId = currentId;
         this.itemsSinceLastTick++;
+        this.recordSuccessfulNavigation();
       }
-    });
-
-    const tryObserve = () => {
-      const container = document.querySelector("ytd-shorts") || document.querySelector("#shorts-container") || document.body;
-      observer.observe(container, { childList: true, subtree: true });
     };
 
-    // Try immediately, retry if not found
+    this.registerLocationChangeListener(detectCurrentShort);
+    this.registerInterval(detectCurrentShort, 250);
+    detectCurrentShort();
+
+    const observeShortsContainer = () => {
+      const container = document.body ?? document.documentElement;
+      this.registerMutationObserver(container, { childList: true, subtree: true }, () => detectCurrentShort());
+    };
+
     if (document.readyState === "complete") {
-      tryObserve();
+      observeShortsContainer();
     } else {
-      window.addEventListener("load", tryObserve);
+      this.registerEventListener(window, "load", observeShortsContainer, { once: true });
     }
 
-    this.urlObserver = observer;
+    this.registerRuntimeMessageListener(this.handleRuntimeMessage);
   }
-
-  /* ── Item tracking ──────────────────────────────────── */
 
   protected getNewItemsSinceLastTick(): number {
     const count = this.itemsSinceLastTick;
@@ -159,59 +139,13 @@ export class ShortsAdapter extends BaseAdapter {
     return count;
   }
 
-  /* ── Cooked widget ──────────────────────────────────── */
-
-  protected async mountCookedWidget(): Promise<void> {
-    await initWidgetPosition(this.site);
-    this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
+  protected mountCookedWidget(): void {
+    this.renderCookedWidget(this.session.cookedScore, this.session.cookedStatus);
   }
 
   protected updateCookedWidget(score: number, status: string): void {
-    const label = getCookedLabel(status as CookedStatus);
-    const scoreClass =
-      status === "Based" ? "brd-score-based" :
-        status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
-
-    let packHtml = "";
-    if (this.session.packState.active) {
-      const progress = getPackProgress(this.session.packState);
-      const packLabel = this.session.packState.mode === "time" && progress.timeRemaining
-        ? `[#] Pack: ${progress.timeRemaining}`
-        : `[#] Pack: ${progress.current}/${progress.total}`;
-      packHtml = `
-        <div style="width:100%;margin-top:6px;">
-          <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${packLabel}</div>
-          <div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${progress.percent}%"></div></div>
-        </div>
-      `;
-    }
-
-    // Check if widget already exists
-    const widgetExists = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`);
-
-    if (widgetExists) {
-      // Update existing widget in-place
-      updateWidgetOverlay(score, status, packHtml);
-    } else {
-      // Create new widget
-      const wrapper = showOverlay("widget", `
-        <div class="brd-widget">
-          <span class="brd-widget-emoji">${label.emoji}</span>
-          <span class="brd-widget-label">${label.label}</span>
-          <span class="brd-widget-score ${scoreClass}">${score}</span>
-          ${packHtml}
-        </div>
-      `);
-
-      // Setup drag handling (this also sets cursor to grab)
-      const widget = wrapper.querySelector(".brd-widget") as HTMLElement;
-      if (widget) {
-        setupWidgetDrag(widget, this.site);
-      }
-    }
+    this.renderCookedWidget(score, status);
   }
-
-  /* ── Intervention overlay ───────────────────────────── */
 
   protected showInterventionOverlay(): void {
     const label = getCookedLabel(this.session.cookedStatus);
@@ -219,11 +153,11 @@ export class ShortsAdapter extends BaseAdapter {
       <div class="brd-fullscreen">
         <div class="brd-card">
           <h2>${label.emoji} ${label.label}!</h2>
-          <p>Your scrolling score just hit ${this.session.cookedScore}. Your brain is getting crispy. Time to make a choice:</p>
+          <p>Your scrolling score just hit ${Math.round(this.session.cookedScore)}. Your brain is getting crispy. Time to make a choice:</p>
           <div class="brd-btn-row">
-            <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going [->]</button>
-            <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-            <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass</button>
+            <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
+            <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+            <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
           </div>
         </div>
       </div>
@@ -240,10 +174,7 @@ export class ShortsAdapter extends BaseAdapter {
     });
   }
 
-  /* ── "No you are not" overlay ───────────────────────── */
-
   protected showBuiltDifferentDeniedOverlay(): void {
-    // Freeze the feed — you're not scrolling away from this
     this.freezeFeed();
 
     const wrapper = showOverlay("denied", `
@@ -252,9 +183,9 @@ export class ShortsAdapter extends BaseAdapter {
           <h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2>
           <p style="text-align:center;">You thought you could just scroll away? Pick one.</p>
           <div class="brd-btn-row" style="justify-content:center;">
-            <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-            <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-            <button class="brd-btn brd-btn-ghost" data-action="vibe">[?] Vibe Check</button>
+            <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+            <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+            <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
           </div>
         </div>
       </div>
@@ -277,34 +208,27 @@ export class ShortsAdapter extends BaseAdapter {
     });
   }
 
-  /* ── Skyrim overlay (max cooked, pack complete) ─────── */
-
   protected showSkyrimOverlay(message: string): void {
     const videoUrl = chrome.runtime.getURL("assets/skyrim-skeleton.mp4");
-
-    // Freeze the Shorts feed while overlay is up
     this.freezeFeed();
 
     const wrapper = showOverlay("skyrim", `
       <div class="brd-fullscreen">
-        <div class="brd-video-wrap">
-          <video playsinline></video>
-        </div>
+        <div class="brd-video-wrap"><video playsinline></video></div>
         <div class="brd-message">${message}</div>
         <div class="brd-btn-row">
-          <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-          <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-          <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different [+]</button>
+          <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+          <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+          <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different</button>
         </div>
       </div>
     `);
 
-    // Set src directly and call load() – more reliable than <source> child in Shadow DOM
-    const video = wrapper.querySelector("video");
+    const video = wrapper.querySelector("video") as HTMLVideoElement | null;
     if (video) {
       video.src = videoUrl;
       video.load();
-      video.play().catch(() => { });
+      video.play().catch(() => undefined);
     }
 
     wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
@@ -320,23 +244,16 @@ export class ShortsAdapter extends BaseAdapter {
     wrapper.querySelector("[data-action='dismiss']")?.addEventListener("click", () => {
       removeOverlay("skyrim");
       this.thawFeed();
-      // Set the flag — next scroll will trigger "No you are not"
       this.builtDifferentDismissed = true;
     });
   }
 
-  /* ── Touch Grass overlay — Zen Mode ─────────────────── */
-
   protected showTouchGrassOverlay(): void {
     const endTime = this.session.touchGrass.endsAt;
-    const tips = TOUCH_GRASS_TIPS.sort(() => Math.random() - 0.5).slice(0, 3);
-
-    // Freeze the Shorts feed
+    const tips = TOUCH_GRASS_TIPS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
     this.freezeFeed();
 
-    // Cats-only slideshow + occasional webcam
-    // cataas.com — free cat image API, no auth needed
-    const ZEN_IMAGES = [
+    const zenImages = [
       "https://cataas.com/cat?width=900&height=700&t=1",
       "https://cataas.com/cat?width=900&height=700&t=2",
       "https://cataas.com/cat?width=900&height=700&t=3",
@@ -347,7 +264,7 @@ export class ShortsAdapter extends BaseAdapter {
       "https://cataas.com/cat?width=900&height=700&t=8",
       "https://cataas.com/cat?width=900&height=700&t=9",
       "https://cataas.com/cat?width=900&height=700&t=10",
-      "WEBCAM", // show the user their own face
+      "WEBCAM",
       "https://cataas.com/cat?width=900&height=700&t=11",
       "https://cataas.com/cat?width=900&height=700&t=12",
       "https://cataas.com/cat?width=900&height=700&t=13",
@@ -356,9 +273,7 @@ export class ShortsAdapter extends BaseAdapter {
       "WEBCAM",
     ];
 
-    // Shuffle and ensure webcam isn't always first
-    const shuffled = [...ZEN_IMAGES].sort(() => Math.random() - 0.5);
-
+    const shuffled = [...zenImages].sort(() => Math.random() - 0.5);
     const wrapper = showOverlay("touchgrass", `
       <div class="brd-fullscreen brd-zen-bg">
         <div class="brd-zen-slide-wrap">
@@ -367,13 +282,11 @@ export class ShortsAdapter extends BaseAdapter {
           <div class="brd-zen-caption"></div>
         </div>
         <div class="brd-zen-card">
-          <div class="brd-zen-header">[*] Touch Grass Mode</div>
+          <div class="brd-zen-header">Touch Grass Mode</div>
           <div class="brd-timer" id="brd-tg-timer">00:00</div>
-          <div class="brd-tips">
-            ${tips.map((t) => `<div class="brd-tip">${t}</div>`).join("")}
-          </div>
+          <div class="brd-tips">${tips.map((tip) => `<div class="brd-tip">${tip}</div>`).join("")}</div>
           <div class="brd-btn-row" style="justify-content:center;">
-            <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass (will be logged)</button>
+            <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass</button>
           </div>
         </div>
       </div>
@@ -385,17 +298,24 @@ export class ShortsAdapter extends BaseAdapter {
     let webcamStream: MediaStream | null = null;
     let slideIndex = 0;
 
-    const ZEN_CAPTIONS = [
-      "breathe.", "you are here.", "it's okay.", "look at this.",
-      "touch grass.", "be present.", "slow down.", "this is real life.",
-      "you look great btw.", "hi.", "go outside.", "drink water.",
+    const captions = [
+      "breathe.",
+      "you are here.",
+      "it's okay.",
+      "look at this.",
+      "touch grass.",
+      "be present.",
+      "slow down.",
+      "this is real life.",
+      "you look great btw.",
+      "hi.",
+      "go outside.",
+      "drink water.",
     ];
 
-    const showSlide = async (idx: number) => {
-      const src = shuffled[idx % shuffled.length];
-
+    const showSlide = async (index: number) => {
+      const src = shuffled[index % shuffled.length];
       if (src === "WEBCAM") {
-        // Show webcam
         imgEl.style.display = "none";
         webcamEl.style.display = "block";
         captionEl.textContent = "hi. this is you. say hi.";
@@ -404,40 +324,35 @@ export class ShortsAdapter extends BaseAdapter {
             webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             webcamEl.srcObject = webcamStream;
           } catch {
-            // Webcam denied — skip to next
-            showSlide(idx + 1);
-            return;
+            await showSlide(index + 1);
           }
         }
-      } else {
-        // Show image
-        webcamEl.style.display = "none";
-        imgEl.style.display = "block";
-        imgEl.src = src;
-        captionEl.textContent = ZEN_CAPTIONS[Math.floor(Math.random() * ZEN_CAPTIONS.length)];
+        return;
       }
+
+      webcamEl.style.display = "none";
+      imgEl.style.display = "block";
+      imgEl.src = src;
+      captionEl.textContent = captions[Math.floor(Math.random() * captions.length)];
     };
 
-    // Start slideshow
     showSlide(slideIndex);
-    const slideInterval = setInterval(() => {
+    const slideInterval = window.setInterval(() => {
       slideIndex++;
-      showSlide(slideIndex);
+      void showSlide(slideIndex);
     }, 4000);
 
-    // Ambient audio via Web Audio API — soft sine wave drone
     let audioCtx: AudioContext | null = null;
     let gainNode: GainNode | null = null;
     try {
       audioCtx = new AudioContext();
       gainNode = audioCtx.createGain();
       gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 2); // fade in gently
+      gainNode.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 2);
       gainNode.connect(audioCtx.destination);
 
-      // Layer two detuned oscillators for a richer ambient tone
-      const freqs = [110, 165, 220]; // A2, E3, A3 — open fifth chord
-      freqs.forEach((freq, i) => {
+      const freqs = [110, 165, 220];
+      freqs.forEach((freq, index) => {
         const osc = audioCtx!.createOscillator();
         const oscGain = audioCtx!.createGain();
         osc.type = "sine";
@@ -447,26 +362,28 @@ export class ShortsAdapter extends BaseAdapter {
         oscGain.connect(gainNode!);
         osc.start();
 
-        // Slow tremolo on each oscillator for a breathing effect
         const lfo = audioCtx!.createOscillator();
         const lfoGain = audioCtx!.createGain();
-        lfo.frequency.setValueAtTime(0.15 + i * 0.05, audioCtx!.currentTime);
+        lfo.frequency.setValueAtTime(0.15 + index * 0.05, audioCtx!.currentTime);
         lfoGain.gain.setValueAtTime(0.015, audioCtx!.currentTime);
         lfo.connect(lfoGain);
         lfoGain.connect(oscGain.gain);
         lfo.start();
       });
     } catch {
-      // Audio context not available — silent mode
+      audioCtx = null;
+      gainNode = null;
     }
 
-    // Countdown timer
-    const timerEl = wrapper.querySelector("#brd-tg-timer");
-    const timerInterval = setInterval(() => {
+    const timerEl = wrapper.querySelector("#brd-tg-timer") as HTMLElement | null;
+    const timerInterval = window.setInterval(() => {
       const remaining = Math.max(0, endTime - Date.now());
-      const min = Math.floor(remaining / 60_000);
-      const sec = Math.floor((remaining % 60_000) / 1_000);
-      if (timerEl) timerEl.textContent = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+      const minutes = Math.floor(remaining / 60_000);
+      const seconds = Math.floor((remaining % 60_000) / 1_000);
+      if (timerEl) {
+        timerEl.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+
       if (remaining <= 0) {
         clearInterval(timerInterval);
         clearInterval(slideInterval);
@@ -478,6 +395,8 @@ export class ShortsAdapter extends BaseAdapter {
       }
     }, 1000);
 
+    this.addCleanup(() => clearInterval(slideInterval));
+    this.addCleanup(() => clearInterval(timerInterval));
     wrapper.querySelector("[data-action='bypass']")?.addEventListener("click", () => {
       clearInterval(timerInterval);
       clearInterval(slideInterval);
@@ -489,37 +408,20 @@ export class ShortsAdapter extends BaseAdapter {
     });
   }
 
-  private stopZenAudio(ctx: AudioContext | null, gain: GainNode | null) {
-    if (!ctx || !gain) return;
-    try {
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
-      setTimeout(() => ctx.close(), 600);
-    } catch { /* ignore */ }
-  }
-
-  private stopWebcam(stream: MediaStream | null) {
-    if (!stream) return;
-    stream.getTracks().forEach((t) => t.stop());
-  }
-
-  /* ── Vibe Check overlay ─────────────────────────────── */
-
   protected showVibeCheckOverlay(): void {
-    const vibes = VIBE_OPTIONS.map((v) => `
-      <div class="brd-vibe-card" data-vibe="${v.id}">
-        <span class="brd-vibe-emoji">${v.emoji}</span>
-        <span class="brd-vibe-label">${v.label}</span>
+    const vibes = VIBE_OPTIONS.map((vibe) => `
+      <div class="brd-vibe-card" data-vibe="${vibe.id}">
+        <span class="brd-vibe-emoji">${vibe.emoji}</span>
+        <span class="brd-vibe-label">${vibe.label}</span>
       </div>
     `).join("");
 
     const wrapper = showOverlay("vibecheck", `
       <div class="brd-fullscreen">
         <div class="brd-card">
-          <h2>[?] Vibe Check</h2>
+          <h2>Vibe Check</h2>
           <p>What are you here for? This adjusts how strict the cooked meter is.</p>
-          <div class="brd-vibe-grid">
-            ${vibes}
-          </div>
+          <div class="brd-vibe-grid">${vibes}</div>
           <div class="brd-btn-row" style="justify-content:center;">
             <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
           </div>
@@ -527,23 +429,34 @@ export class ShortsAdapter extends BaseAdapter {
       </div>
     `);
 
-    wrapper.querySelectorAll("[data-vibe]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const intent = (el as HTMLElement).dataset.vibe as VibeIntent;
-        this.setVibeIntent(intent);
+    wrapper.querySelectorAll("[data-vibe]").forEach((element) => {
+      element.addEventListener("click", () => {
+        this.setVibeIntent((element as HTMLElement).dataset.vibe as VibeIntent);
         removeOverlay("vibecheck");
       });
     });
-
-    wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => {
-      removeOverlay("vibecheck");
-    });
+    wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
   }
-
-  /* ── Cleanup ────────────────────────────────────────── */
 
   protected removeAllOverlays(): void {
     removeAll();
     this.thawFeed();
+  }
+
+  private stopZenAudio(ctx: AudioContext | null, gain: GainNode | null) {
+    if (!ctx || !gain) return;
+    try {
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+      window.setTimeout(() => {
+        void ctx.close();
+      }, 600);
+    } catch {
+      // ignore
+    }
+  }
+
+  private stopWebcam(stream: MediaStream | null) {
+    if (!stream) return;
+    stream.getTracks().forEach((track) => track.stop());
   }
 }

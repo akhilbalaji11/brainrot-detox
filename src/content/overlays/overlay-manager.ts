@@ -1,18 +1,29 @@
-/**
- * Overlay manager – creates a Shadow DOM host once, then provides
- * methods to show/hide named overlays inside it.
- * All overlay CSS is injected into the shadow root so it can't
- * conflict with the host page.
- */
-
+import { DEFAULT_WIDGET_POSITION } from "@/core/constants";
+import { getCookedLabel } from "@/core/cooked-meter";
 import { getWidgetPosition, saveWidgetPosition } from "@/core/storage";
-import type { SiteKey, WidgetPosition } from "@/core/types";
+import type { CookedStatus, SiteKey, WidgetPosition } from "@/core/types";
 
 const HOST_ID = "brd-overlay-host";
+const DRAG_THRESHOLD_PX = 8;
 
 let shadowRoot: ShadowRoot | null = null;
 let currentSiteKey: SiteKey | null = null;
-let currentPosition: WidgetPosition = { edge: "right", verticalOffset: 20 };
+let currentPosition: WidgetPosition = { ...DEFAULT_WIDGET_POSITION };
+let widgetCleanup: (() => void) | null = null;
+let widgetActivate: (() => void) | null = null;
+
+interface WidgetPackState {
+  label: string;
+  percent: number;
+}
+
+interface WidgetOverlayState {
+  siteKey: SiteKey;
+  score: number;
+  status: string;
+  pack?: WidgetPackState | null;
+  onActivate?: (() => void) | null;
+}
 
 function ensureHost(): ShadowRoot {
   if (shadowRoot) return shadowRoot;
@@ -25,35 +36,29 @@ function ensureHost(): ShadowRoot {
     document.documentElement.appendChild(host);
   }
 
-  // Reuse existing shadow root if already attached (SPA re-navigation safety).
-  // Calling attachShadow() on an element that already has a shadow root throws.
   if (host.shadowRoot) {
     shadowRoot = host.shadowRoot;
+    applyTheme();
     return shadowRoot;
   }
 
   shadowRoot = host.attachShadow({ mode: "open" });
 
-  // Inject shared overlay styles
   const style = document.createElement("style");
   style.textContent = OVERLAY_CSS;
   shadowRoot.appendChild(style);
 
-  // @import is not supported inside Shadow DOM <style> tags – inject a <link> instead
   const fontLink = document.createElement("link");
   fontLink.rel = "stylesheet";
   fontLink.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap";
   shadowRoot.appendChild(fontLink);
 
-  // Apply theme
   applyTheme();
-
   return shadowRoot;
 }
 
 export function showOverlay(name: string, html: string): HTMLElement {
   const root = ensureHost();
-  // Remove existing overlay with same name
   const existing = root.querySelector(`[data-overlay="${name}"]`);
   if (existing) existing.remove();
 
@@ -64,68 +69,66 @@ export function showOverlay(name: string, html: string): HTMLElement {
   return wrapper;
 }
 
-/** Update the widget overlay in-place (preserves position and drag handlers) */
-export function updateWidgetOverlay(score: number, status: string, packHtml: string): void {
-    const root = ensureHost();
-    const existing = root.querySelector(`[data-overlay="widget"]`) as HTMLElement;
-    if (!existing) return;
+export function mountOrUpdateWidget(state: WidgetOverlayState): HTMLElement {
+  const root = ensureHost();
+  currentSiteKey = state.siteKey;
+  widgetActivate = state.onActivate ?? null;
 
-    const widget = existing.querySelector('.brd-widget') as HTMLElement;
-    if (!widget) return;
+  let overlay = root.querySelector(`[data-overlay="widget"]`) as HTMLElement | null;
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.setAttribute("data-overlay", "widget");
+    overlay.innerHTML = `
+      <div class="brd-widget">
+        <div class="brd-widget-main">
+          <span class="brd-widget-emoji"></span>
+          <span class="brd-widget-label"></span>
+          <span class="brd-widget-score"></span>
+        </div>
+        <div class="brd-widget-pack" hidden>
+          <div class="brd-widget-pack-label"></div>
+          <div class="brd-pack-bar"><div class="brd-pack-fill"></div></div>
+        </div>
+      </div>
+    `;
+    root.appendChild(overlay);
 
-    // Get the label based on status
-    const getCookedLabel = (status: string) => {
-        const labels: Record<string, { emoji: string; label: string }> = {
-            "Based": { emoji: "( ._.)", label: "Based" },
-            "Medium Cooked": { emoji: "( ◕_◕)", label: "Medium" },
-            "Absolutely Cooked": { emoji: "( x_x)", label: "Cooked" }
-        };
-        return labels[status] || labels["Based"];
-    };
-
-    const label = getCookedLabel(status);
-    const scoreClass =
-        status === "Based" ? "brd-score-based" :
-            status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
-
-    // Update the score element
-    const scoreEl = widget.querySelector('.brd-widget-score') as HTMLElement;
-    if (scoreEl) {
-        scoreEl.textContent = String(score);
-        scoreEl.className = `brd-widget-score ${scoreClass}`;
+    const widget = overlay.querySelector(".brd-widget") as HTMLElement | null;
+    if (widget) {
+      widgetCleanup?.();
+      widgetCleanup = setupWidgetInteractions(widget, state.siteKey);
     }
+  }
 
-    // Update the emoji
-    const emojiEl = widget.querySelector('.brd-widget-emoji') as HTMLElement;
-    if (emojiEl) {
-        emojiEl.textContent = label.emoji;
-    }
-
-    // Update the label
-    const labelEl = widget.querySelector('.brd-widget-label') as HTMLElement;
-    if (labelEl) {
-        labelEl.textContent = label.label;
-    }
-
-    // Update pack HTML (remove existing, add new if present)
-    const existingPack = widget.querySelector('.brd-pack-bar')?.parentElement;
-    if (existingPack) {
-        existingPack.remove();
-    }
-    if (packHtml) {
-        widget.insertAdjacentHTML('beforeend', packHtml);
-    }
+  patchWidgetOverlay(overlay, state);
+  applyWidgetPosition();
+  return overlay;
 }
 
 export function removeOverlay(name: string) {
-  if (!shadowRoot) return;
-  const el = shadowRoot.querySelector(`[data-overlay="${name}"]`);
-  if (el) el.remove();
+  const root = shadowRoot;
+  if (!root) return;
+
+  const element = root.querySelector(`[data-overlay="${name}"]`);
+  if (!element) return;
+
+  if (name === "widget") {
+    widgetCleanup?.();
+    widgetCleanup = null;
+    widgetActivate = null;
+  }
+
+  element.remove();
 }
 
 export function removeAllOverlays() {
-  if (!shadowRoot) return;
-  shadowRoot.querySelectorAll("[data-overlay]").forEach((el) => el.remove());
+  const root = shadowRoot;
+  if (!root) return;
+
+  widgetCleanup?.();
+  widgetCleanup = null;
+  widgetActivate = null;
+  root.querySelectorAll("[data-overlay]").forEach((element) => element.remove());
 }
 
 export function getOverlayRoot(): ShadowRoot {
@@ -133,114 +136,173 @@ export function getOverlayRoot(): ShadowRoot {
 }
 
 export async function initWidgetPosition(siteKey: SiteKey) {
-    currentSiteKey = siteKey;
-    currentPosition = await getWidgetPosition(siteKey);
-    applyWidgetPosition();
-}
-
-function applyWidgetPosition() {
-    if (!shadowRoot) return;
-    const widget = shadowRoot.querySelector('.brd-widget') as HTMLElement;
-    if (!widget) return;
-
-    // Position on the edge (0px) and use verticalOffset for bottom position
-    widget.style.right = currentPosition.edge === 'right' ? '0px' : 'auto';
-    widget.style.left = currentPosition.edge === 'left' ? '0px' : 'auto';
-    widget.style.bottom = `${currentPosition.verticalOffset}px`;
+  currentSiteKey = siteKey;
+  currentPosition = await getWidgetPosition(siteKey);
+  applyWidgetPosition();
 }
 
 export async function applyTheme() {
-    const res = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
-    const theme = res?.success && res.data?.theme ? res.data.theme : 'light';
+  const res = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
+  const theme = res?.success && res.data?.theme ? res.data.theme : "light";
 
-    const host = document.getElementById(HOST_ID);
-    if (host) {
-        if (theme === 'dark') {
-            host.classList.add('brd-dark');
-        } else {
-            host.classList.remove('brd-dark');
-        }
+  const host = document.getElementById(HOST_ID);
+  if (!host) return;
+
+  if (theme === "dark") {
+    host.classList.add("brd-dark");
+  } else {
+    host.classList.remove("brd-dark");
+  }
+}
+
+function patchWidgetOverlay(overlay: HTMLElement, state: WidgetOverlayState) {
+  const widget = overlay.querySelector(".brd-widget") as HTMLElement | null;
+  if (!widget) return;
+
+  const label = getCookedLabel(state.status as CookedStatus);
+  const scoreClass = state.status === "Based" ? "brd-score-based" :
+    state.status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
+
+  const emojiEl = widget.querySelector(".brd-widget-emoji") as HTMLElement | null;
+  const labelEl = widget.querySelector(".brd-widget-label") as HTMLElement | null;
+  const scoreEl = widget.querySelector(".brd-widget-score") as HTMLElement | null;
+  const packWrap = widget.querySelector(".brd-widget-pack") as HTMLElement | null;
+  const packLabel = widget.querySelector(".brd-widget-pack-label") as HTMLElement | null;
+  const packFill = widget.querySelector(".brd-pack-fill") as HTMLElement | null;
+
+  if (emojiEl) emojiEl.textContent = label.emoji;
+  if (labelEl) labelEl.textContent = label.label;
+  if (scoreEl) {
+    scoreEl.textContent = String(Math.round(state.score));
+    scoreEl.className = `brd-widget-score ${scoreClass}`;
+  }
+
+  if (packWrap && packLabel && packFill) {
+    if (state.pack) {
+      packWrap.hidden = false;
+      packLabel.textContent = state.pack.label;
+      packFill.style.width = `${Math.max(0, Math.min(100, state.pack.percent))}%`;
+    } else {
+      packWrap.hidden = true;
+      packLabel.textContent = "";
+      packFill.style.width = "0%";
     }
+  }
 }
 
-export function setupWidgetDrag(widget: HTMLElement, siteKey: SiteKey) {
-    let isDragging = false;
-    let startY = 0;
-    let startBottom = 0;
-    let currentEdge: 'left' | 'right' = currentPosition.edge;
+function applyWidgetPosition() {
+  const widget = shadowRoot?.querySelector(".brd-widget") as HTMLElement | null;
+  if (!widget) return;
 
-    const onPointerDown = (e: PointerEvent) => {
-        // Don't drag if clicking on interactive elements
-        if ((e.target as HTMLElement).closest('button, input, a')) return;
-
-        isDragging = true;
-        startY = e.clientY;
-        startBottom = window.innerHeight - widget.getBoundingClientRect().bottom;
-        currentEdge = currentPosition.edge;
-
-        widget.style.cursor = 'grabbing';
-        widget.style.transition = 'none';
-        e.preventDefault();
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-        if (!isDragging) return;
-
-        const deltaY = startY - e.clientY;
-        const newBottom = startBottom + deltaY;
-
-        // Only move vertically, keep on the same edge
-        widget.style.left = currentEdge === 'left' ? '0px' : 'auto';
-        widget.style.right = currentEdge === 'right' ? '0px' : 'auto';
-        widget.style.bottom = `${Math.max(0, Math.min(newBottom, window.innerHeight - 100))}px`;
-    };
-
-    const onPointerUp = async (e: PointerEvent) => {
-        if (!isDragging) return;
-        isDragging = false;
-
-        widget.style.cursor = 'grab';
-        widget.style.transition = 'all 0.2s ease';
-
-        // Determine which edge based on pointer position
-        const pointerX = e.clientX;
-        const windowCenterX = window.innerWidth / 2;
-        const newEdge = pointerX < windowCenterX ? 'left' : 'right';
-
-        // Calculate vertical offset from bottom
-        const rect = widget.getBoundingClientRect();
-        const verticalOffset = Math.max(0, window.innerHeight - rect.bottom);
-
-        // Update position
-        currentPosition = {
-            edge: newEdge,
-            verticalOffset: Math.max(0, verticalOffset)
-        };
-
-        applyWidgetPosition();
-
-        // Save position
-        if (currentSiteKey) {
-            await saveWidgetPosition(currentSiteKey, currentPosition);
-        }
-    };
-
-    widget.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-
-    // Set initial cursor
-    widget.style.cursor = 'grab';
+  widget.style.left = currentPosition.edge === "left" ? "0px" : "auto";
+  widget.style.right = currentPosition.edge === "right" ? "0px" : "auto";
+  widget.style.bottom = `${clampBottomOffset(currentPosition.verticalOffset, widget)}px`;
 }
 
-/* ──────────────────────────────────────────────────────── */
-/*  Shared CSS for all overlays (injected into shadow DOM)  */
-/* ──────────────────────────────────────────────────────── */
+function setupWidgetInteractions(widget: HTMLElement, siteKey: SiteKey) {
+  let pointerId: number | null = null;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let startBottom = 0;
+
+  const resetPointerState = () => {
+    pointerId = null;
+    dragging = false;
+    widget.style.cursor = "grab";
+    widget.style.transition = "all 0.2s ease";
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button, input, a")) return;
+
+    pointerId = event.pointerId;
+    dragging = false;
+    startX = event.clientX;
+    startY = event.clientY;
+    startBottom = window.innerHeight - widget.getBoundingClientRect().bottom;
+
+    widget.style.cursor = "grabbing";
+    widget.style.transition = "none";
+    widget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - startX;
+    const deltaY = startY - event.clientY;
+    if (!dragging && Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD_PX) {
+      dragging = true;
+    }
+
+    if (!dragging) return;
+
+    const nextBottom = clampBottomOffset(startBottom + deltaY, widget);
+    widget.style.left = currentPosition.edge === "left" ? "0px" : "auto";
+    widget.style.right = currentPosition.edge === "right" ? "0px" : "auto";
+    widget.style.bottom = `${nextBottom}px`;
+  };
+
+  const finishPointer = async (event: PointerEvent) => {
+    if (pointerId !== event.pointerId) return;
+
+    const wasDragging = dragging;
+    if (widget.hasPointerCapture(event.pointerId)) {
+      widget.releasePointerCapture(event.pointerId);
+    }
+
+    if (wasDragging) {
+      const rect = widget.getBoundingClientRect();
+      currentPosition = {
+        edge: event.clientX < window.innerWidth / 2 ? "left" : "right",
+        verticalOffset: clampBottomOffset(window.innerHeight - rect.bottom, widget),
+      };
+      currentSiteKey = siteKey;
+      applyWidgetPosition();
+      await saveWidgetPosition(siteKey, currentPosition);
+    } else {
+      widgetActivate?.();
+    }
+
+    resetPointerState();
+  };
+
+  const onPointerCancel = (event: PointerEvent) => {
+    if (pointerId !== event.pointerId) return;
+
+    if (widget.hasPointerCapture(event.pointerId)) {
+      widget.releasePointerCapture(event.pointerId);
+    }
+
+    applyWidgetPosition();
+    resetPointerState();
+  };
+
+  widget.addEventListener("pointerdown", onPointerDown);
+  widget.addEventListener("pointermove", onPointerMove);
+  widget.addEventListener("pointerup", finishPointer);
+  widget.addEventListener("pointercancel", onPointerCancel);
+  widget.style.cursor = "grab";
+
+  return () => {
+    widget.removeEventListener("pointerdown", onPointerDown);
+    widget.removeEventListener("pointermove", onPointerMove);
+    widget.removeEventListener("pointerup", finishPointer);
+    widget.removeEventListener("pointercancel", onPointerCancel);
+  };
+}
+
+function clampBottomOffset(offset: number, widget: HTMLElement): number {
+  const maxOffset = Math.max(0, window.innerHeight - widget.getBoundingClientRect().height - 8);
+  return Math.max(0, Math.min(offset, maxOffset));
+}
 
 const OVERLAY_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── Fullscreen backdrop ─────────────────────────── */
   .brd-fullscreen {
     position: fixed;
     inset: 0;
@@ -257,7 +319,6 @@ const OVERLAY_CSS = `
     color: #3a2e1e;
   }
 
-  /* ── Notebook card ───────────────────────────────── */
   .brd-card {
     background: #fdf8ee;
     border: 3px solid #3a2e1e;
@@ -269,7 +330,6 @@ const OVERLAY_CSS = `
     pointer-events: all;
     animation: brd-slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     font-family: 'Patrick Hand', 'Caveat', cursive, sans-serif;
-    /* Lined paper effect */
     background-image: repeating-linear-gradient(
       to bottom,
       transparent,
@@ -300,7 +360,6 @@ const OVERLAY_CSS = `
     margin-bottom: 16px;
   }
 
-  /* ── Buttons ─────────────────────────────────────── */
   .brd-btn-row {
     display: flex;
     gap: 10px;
@@ -338,6 +397,7 @@ const OVERLAY_CSS = `
     color: #7b2d8b;
     box-shadow: 2px 2px 0 #7b2d8b;
   }
+
   .brd-btn-primary:hover { box-shadow: 3px 3px 0 #7b2d8b; }
 
   .brd-btn-success {
@@ -346,6 +406,7 @@ const OVERLAY_CSS = `
     color: #2e7d32;
     box-shadow: 2px 2px 0 #2e7d32;
   }
+
   .brd-btn-success:hover { box-shadow: 3px 3px 0 #2e7d32; }
 
   .brd-btn-ghost {
@@ -354,6 +415,7 @@ const OVERLAY_CSS = `
     border-color: #c8b89a;
     box-shadow: 2px 2px 0 #c8b89a;
   }
+
   .brd-btn-ghost:hover { box-shadow: 3px 3px 0 #c8b89a; }
 
   .brd-btn-danger {
@@ -362,16 +424,18 @@ const OVERLAY_CSS = `
     border-color: #c0392b;
     box-shadow: 2px 2px 0 #c0392b;
   }
+
   .brd-btn-danger:hover { box-shadow: 3px 3px 0 #c0392b; }
 
-  /* ── Floating widget (cooked meter pill) ─────── */
   .brd-widget {
     position: fixed;
     bottom: 20px;
     right: 20px;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 132px;
     padding: 8px 14px;
     background: #fdf8ee;
     border: 2.5px solid #3a2e1e;
@@ -381,7 +445,6 @@ const OVERLAY_CSS = `
     z-index: 999998;
     font-family: 'Patrick Hand', 'Caveat', cursive, -apple-system, sans-serif;
     animation: brd-slideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-    cursor: default;
     user-select: none;
     transition: all 0.2s ease;
   }
@@ -389,6 +452,22 @@ const OVERLAY_CSS = `
   .brd-widget:hover {
     transform: translate(-1px, -1px);
     box-shadow: 4px 4px 0 #3a2e1e;
+  }
+
+  .brd-widget-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brd-widget-pack {
+    width: 100%;
+  }
+
+  .brd-widget-pack-label {
+    font-size: 10px;
+    color: #7a6a50;
+    margin-bottom: 3px;
   }
 
   .brd-widget-emoji {
@@ -412,6 +491,7 @@ const OVERLAY_CSS = `
     padding: 2px 7px;
     border-radius: 4px;
     min-width: 28px;
+    margin-left: auto;
     text-align: center;
     font-family: 'Caveat', cursive;
     border: 1.5px solid currentColor;
@@ -421,7 +501,6 @@ const OVERLAY_CSS = `
   .brd-score-medium { background: #fff3e0; color: #e65100; }
   .brd-score-cooked { background: #fdecea; color: #c0392b; }
 
-  /* ── Pack progress bar ───────────────────────── */
   .brd-pack-bar {
     width: 100%;
     height: 8px;
@@ -438,7 +517,6 @@ const OVERLAY_CSS = `
     transition: width 0.5s ease;
   }
 
-  /* ── Timer ────────────────────────────────────── */
   .brd-timer {
     font-family: 'Caveat', cursive;
     font-size: 56px;
@@ -449,7 +527,6 @@ const OVERLAY_CSS = `
     margin: 12px 0;
   }
 
-  /* ── Vibe grid ───────────────────────────────── */
   .brd-vibe-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -491,7 +568,6 @@ const OVERLAY_CSS = `
     color: #7a6a50;
   }
 
-  /* ── Tips ─────────────────────────────────────── */
   .brd-tips {
     display: flex;
     flex-direction: column;
@@ -509,7 +585,6 @@ const OVERLAY_CSS = `
     color: #7a6a50;
   }
 
-  /* ── Video container ─────────────────────────── */
   .brd-video-wrap {
     width: 100%;
     max-width: 480px;
@@ -539,7 +614,6 @@ const OVERLAY_CSS = `
     text-underline-offset: 4px;
   }
 
-  /* ── Animations ──────────────────────────────── */
   @keyframes brd-fadeIn {
     from { opacity: 0; }
     to   { opacity: 1; }
@@ -560,7 +634,6 @@ const OVERLAY_CSS = `
     50% { opacity: 0.5; }
   }
 
-  /* ── Zen / Touch Grass slideshow ─────────────────── */
   .brd-zen-bg {
     background: #000;
     flex-direction: row;
@@ -587,7 +660,7 @@ const OVERLAY_CSS = `
   }
 
   .brd-zen-webcam {
-    transform: scaleX(-1); /* mirror effect */
+    transform: scaleX(-1);
   }
 
   .brd-zen-caption {
@@ -606,7 +679,6 @@ const OVERLAY_CSS = `
     pointer-events: none;
   }
 
-  /* Zen sidebar — keep dark so the cat photos pop */
   .brd-zen-card {
     width: 260px;
     flex-shrink: 0;
@@ -647,7 +719,6 @@ const OVERLAY_CSS = `
     to   { opacity: 1; }
   }
 
-  /* ── Dark mode ──────────────────────────────────── */
   :host(.brd-dark) .brd-fullscreen {
     background: rgba(26, 26, 26, 0.95);
   }
@@ -668,7 +739,8 @@ const OVERLAY_CSS = `
     text-decoration-color: #e74c3c;
   }
 
-  :host(.brd-dark) .brd-card p {
+  :host(.brd-dark) .brd-card p,
+  :host(.brd-dark) .brd-widget-pack-label {
     color: #a09080;
   }
 
@@ -754,4 +826,3 @@ const OVERLAY_CSS = `
     box-shadow: 5px 5px 0 #000;
   }
 `;
-

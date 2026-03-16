@@ -104,7 +104,7 @@ function applyTheme(theme: 'light' | 'dark') {
 }
 
 function updateScore(session: SessionState) {
-    const score = session.cookedScore;
+    const score = Math.round(session.cookedScore);
     const status = session.cookedStatus as CookedStatus;
     const label = getCookedLabel(status);
 

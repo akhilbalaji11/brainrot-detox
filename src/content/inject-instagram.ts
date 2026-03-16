@@ -2,18 +2,32 @@ import { InstagramReelsAdapter } from "./adapters/instagram-reels-adapter";
 
 console.log("[brainrot detox] Instagram Reels content script loaded");
 
-const adapter = new InstagramReelsAdapter();
-adapter.init();
-
-// Handle SPA navigation
+let adapter: InstagramReelsAdapter | null = null;
 let lastUrl = location.href;
-new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        // Re-init when navigating to/from reels
-        if (location.pathname.includes("/reels") || location.pathname.includes("/reel")) {
-            adapter.destroy();
-            adapter.init();
+
+function isSupportedRoute() {
+    return /^\/(reel|reels)\//.test(location.pathname) || location.pathname.startsWith("/explore/reels");
+}
+
+function syncAdapter() {
+    if (isSupportedRoute()) {
+        if (!adapter) {
+            adapter = new InstagramReelsAdapter();
+            void adapter.init();
         }
+        return;
     }
+
+    if (adapter) {
+        adapter.destroy();
+        adapter = null;
+    }
+}
+
+syncAdapter();
+
+new MutationObserver(() => {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    syncAdapter();
 }).observe(document.body, { subtree: true, childList: true });

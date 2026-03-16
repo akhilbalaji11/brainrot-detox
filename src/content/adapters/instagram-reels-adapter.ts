@@ -1,24 +1,49 @@
 import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
 import { computeReelsCookedScore, deriveCookedStatus, getCookedLabel, isMaxCooked, shouldIntervene } from "@/core/cooked-meter";
 import { sendMessage } from "@/core/messaging";
-import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
-import type { CookedStatus, VibeIntent } from "@/core/types";
-import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay, updateWidgetOverlay } from "../overlays/overlay-manager";
+import { incrementPack, isPackComplete } from "@/core/snack-packs";
+import type { VibeIntent } from "@/core/types";
+import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
-/**
- * Instagram Reels adapter
- * Uses swipe-based scoring (same as YouTube Shorts)
- */
 export class InstagramReelsAdapter extends BaseAdapter {
     readonly site = "instagram-reels" as const;
+
     private itemsSinceLastTick = 0;
     private lastReelId = "";
-    private urlObserver: MutationObserver | null = null;
     private lastWheelTime = 0;
-    private readonly WHEEL_DEBOUNCE_MS = 500; // Debounce wheel events to count as one swipe
+    private readonly wheelDebounceMs = 500;
 
-    /* ── Video helpers ───────────────────────────────────── */
+    private readonly handleRuntimeMessage = (msg: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+        if (msg.type === "END_TOUCH_GRASS") {
+            this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 };
+            removeOverlay("skyrim");
+            removeOverlay("touchgrass");
+            this.thawFeed();
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_TOUCH_GRASS") {
+            this.startTouchGrass(msg.payload?.minutes ?? 5);
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_PACK") {
+            this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10);
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_VIBE_CHECK") {
+            this.showVibeCheckOverlay();
+            sendResponse({ success: true });
+            return false;
+        }
+
+        return false;
+    };
 
     private getReelsVideo(): HTMLVideoElement | null {
         return (
@@ -29,119 +54,84 @@ export class InstagramReelsAdapter extends BaseAdapter {
     }
 
     private freezeFeed() {
-        const v = this.getReelsVideo();
-        if (v && !v.paused) v.pause();
+        const video = this.getReelsVideo();
+        if (video && !video.paused) {
+            video.pause();
+        }
     }
 
     private thawFeed() {
-        const v = this.getReelsVideo();
-        if (v && v.paused) v.play().catch(() => { });
+        const video = this.getReelsVideo();
+        if (video && video.paused) {
+            video.play().catch(() => undefined);
+        }
     }
 
-    /* ── Observers ──────────────────────────────────────── */
-
     protected setupObservers(): void {
-        // Track scroll/swipe events
-        window.addEventListener("wheel", this.onWheel, { passive: true });
+        this.registerEventListener(window, "wheel", (event: Event) => {
+            const wheelEvent = event as WheelEvent;
+            const now = Date.now();
+            if (Math.abs(wheelEvent.deltaY) > 20 && now - this.lastWheelTime >= this.wheelDebounceMs) {
+                this.lastWheelTime = now;
+                this.scrollCount++;
+                this.recordActivity(now);
+            }
+        }, { passive: true });
 
-        // Keyboard navigation (down arrow = next reel)
-        window.addEventListener("keydown", this.onKeyDown, { passive: true });
-
-        // Touch events for mobile
-        let touchStartY = 0;
-        window.addEventListener("touchstart", (e) => { touchStartY = e.touches[0]?.clientY ?? 0; }, { passive: true });
-        window.addEventListener("touchend", (e) => {
-            const delta = touchStartY - (e.changedTouches[0]?.clientY ?? 0);
-            if (Math.abs(delta) > 50) {
-                this.swipeCount++;
-                this.itemsSinceLastTick++;
+        this.registerEventListener(window, "keydown", (event: Event) => {
+            const keyEvent = event as KeyboardEvent;
+            if (keyEvent.key === "ArrowDown" || keyEvent.key === "j") {
+                this.scrollCount++;
                 this.recordActivity();
             }
         }, { passive: true });
 
-        // Watch for reel changes via URL polling
-        this.watchReelChanges();
-
-        // Listen for messages
-        chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-            if (msg.type === "END_TOUCH_GRASS") {
-                this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 };
-                removeOverlay("skyrim");
-                removeOverlay("touchgrass");
-                this.thawFeed();
-                sendResponse({ success: true });
-                return false;
+        let touchStartY = 0;
+        this.registerEventListener(window, "touchstart", (event: Event) => {
+            touchStartY = (event as TouchEvent).touches[0]?.clientY ?? 0;
+        }, { passive: true });
+        this.registerEventListener(window, "touchend", (event: Event) => {
+            const delta = touchStartY - ((event as TouchEvent).changedTouches[0]?.clientY ?? 0);
+            if (Math.abs(delta) > 50) {
+                this.scrollCount++;
+                this.recordActivity();
             }
-            if (msg.type === "TRIGGER_TOUCH_GRASS") {
-                this.startTouchGrass(msg.payload?.minutes ?? 5);
-                sendResponse({ success: true });
-                return false;
-            }
-            if (msg.type === "TRIGGER_PACK") {
-                this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10);
-                sendResponse({ success: true });
-                return false;
-            }
-            if (msg.type === "TRIGGER_VIBE_CHECK") {
-                this.showVibeCheckOverlay();
-                sendResponse({ success: true });
-                return false;
-            }
-            return false;
-        });
-    }
+        }, { passive: true });
 
-    private onWheel = (e: WheelEvent) => {
-        const now = Date.now();
-        if (Math.abs(e.deltaY) > 20 && now - this.lastWheelTime > this.WHEEL_DEBOUNCE_MS) {
-            this.lastWheelTime = now;
-            this.swipeCount++;
-            this.itemsSinceLastTick++;
-            this.recordActivity();
-        }
-    };
-
-    private onKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "ArrowDown" || e.key === "j") {
-            this.swipeCount++;
-            this.itemsSinceLastTick++;
-            this.recordActivity();
-        }
-    };
-
-    private watchReelChanges() {
-        // Poll for URL changes (Instagram is SPA)
-        const poll = () => {
+        const detectCurrentReel = () => {
             const match = window.location.pathname.match(/\/reel\/([^/?]+)/);
             const currentId = match?.[1] ?? "";
-            if (currentId && currentId !== this.lastReelId) {
+            if (!currentId) return;
+
+            if (!this.lastReelId) {
+                this.lastReelId = currentId;
+                return;
+            }
+
+            if (currentId !== this.lastReelId) {
                 this.lastReelId = currentId;
                 this.itemsSinceLastTick++;
-                this.swipeCount++;
+                this.recordSuccessfulNavigation();
             }
         };
-        setInterval(poll, 500);
 
-        // Also watch DOM for feed container changes
-        const observer = new MutationObserver(() => poll());
-        const tryObserve = () => {
-            const container =
-                document.querySelector("div[role='presentation']") ??
-                document.querySelector("main") ??
-                document.body;
-            observer.observe(container, { childList: true, subtree: true });
+        this.registerLocationChangeListener(detectCurrentReel);
+        this.registerInterval(detectCurrentReel, 250);
+        detectCurrentReel();
+
+        const observeFeed = () => {
+            const container = document.body ?? document.documentElement;
+            this.registerMutationObserver(container, { childList: true, subtree: true }, () => detectCurrentReel());
         };
 
         if (document.readyState === "complete") {
-            tryObserve();
+            observeFeed();
         } else {
-            window.addEventListener("load", tryObserve);
+            this.registerEventListener(window, "load", observeFeed, { once: true });
         }
 
-        this.urlObserver = observer;
+        this.registerRuntimeMessageListener(this.handleRuntimeMessage);
     }
-
-    /* ── Item tracking ──────────────────────────────────── */
 
     protected getNewItemsSinceLastTick(): number {
         const count = this.itemsSinceLastTick;
@@ -149,18 +139,17 @@ export class InstagramReelsAdapter extends BaseAdapter {
         return count;
     }
 
-    /* ── Override tick for Reels-specific scoring ───────── */
-
     protected async tick() {
         if (!this.enabled) return;
 
         const now = Date.now();
+        const previousScore = this.session.cookedScore;
         const newItems = this.getNewItemsSinceLastTick();
+
         this.session.itemsConsumed += newItems;
         this.session.scrollEvents += this.scrollCount;
 
         const hasNewSignals = this.scrollCount > 0 || newItems > 0 || this.swipeCount > 0;
-        if (hasNewSignals) this.lastSignalAt = now;
         const idleMs = this.lastSignalAt === 0 ? 0 : now - this.lastSignalAt;
 
         if (this.builtDifferentDismissed && hasNewSignals) {
@@ -171,16 +160,10 @@ export class InstagramReelsAdapter extends BaseAdapter {
             return;
         }
 
-        let newScore: number;
-        if (this.session.packState.active) {
-            newScore = this.session.cookedScore;
-        } else {
-            newScore = computeReelsCookedScore(
-                this.session.cookedScore,
-                this.swipeCount,
-                this.session.vibeIntent,
-                idleMs
-            );
+        let newScore = previousScore;
+        if (!this.session.packState.active) {
+            const signalGain = newItems * this.getVelocityMultiplier(now);
+            newScore = computeReelsCookedScore(previousScore, signalGain, this.session.vibeIntent, idleMs);
         }
 
         this.scrollCount = 0;
@@ -204,7 +187,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
                 }
             } else {
                 if (newScore < 95) this.maxCookedShown = false;
-                const scoreRising = newScore >= this.session.cookedScore;
+                const scoreRising = newScore >= previousScore;
                 if (scoreRising && shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)) {
                     this.session.lastInterventionAt = now;
                     this.onIntervention();
@@ -216,66 +199,13 @@ export class InstagramReelsAdapter extends BaseAdapter {
         await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: this.session } });
     }
 
-    /* ── Cooked widget ──────────────────────────────────── */
-
-    protected async mountCookedWidget(): Promise<void> {
-        await initWidgetPosition(this.site);
-        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
+    protected mountCookedWidget(): void {
+        this.renderCookedWidget(this.session.cookedScore, this.session.cookedStatus);
     }
 
     protected updateCookedWidget(score: number, status: string): void {
-        const label = getCookedLabel(status as CookedStatus);
-        const scoreClass =
-            status === "Based" ? "brd-score-based" :
-                status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
-
-        let packHtml = "";
-        if (this.session.packState.active) {
-            const progress = getPackProgress(this.session.packState);
-            const packLabel = this.session.packState.mode === "time" && progress.timeRemaining
-                ? `[#] Pack: ${progress.timeRemaining}`
-                : `[#] Pack: ${progress.current}/${progress.total}`;
-            packHtml = `
-                <div style="width:100%;margin-top:6px;">
-                    <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${packLabel}</div>
-                    <div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${progress.percent}%"></div></div>
-                </div>
-            `;
-        }
-
-        // Check if widget already exists
-        const widgetExists = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`);
-
-        if (widgetExists) {
-            // Update existing widget in-place
-            updateWidgetOverlay(score, status, packHtml);
-            // Re-attach click handler for vibe check
-            const widget = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`) as HTMLElement;
-            if (widget) {
-                widget.style.cursor = "pointer";
-                widget.onclick = () => this.showVibeCheckOverlay();
-            }
-        } else {
-            // Create new widget
-            const wrapper = showOverlay("widget", `
-                <div class="brd-widget">
-                    <span class="brd-widget-emoji">${label.emoji}</span>
-                    <span class="brd-widget-label">${label.label}</span>
-                    <span class="brd-widget-score ${scoreClass}">${score}</span>
-                    ${packHtml}
-                </div>
-            `);
-
-            const widget = wrapper.querySelector(".brd-widget");
-            if (widget) {
-                (widget as HTMLElement).style.cursor = "pointer";
-                (widget as HTMLElement).onclick = () => this.showVibeCheckOverlay();
-                setupWidgetDrag(widget as HTMLElement, this.site);
-            }
-        }
+        this.renderCookedWidget(score, status);
     }
-
-    /* ── Intervention overlay ───────────────────────────── */
 
     protected showInterventionOverlay(): void {
         const label = getCookedLabel(this.session.cookedStatus);
@@ -283,11 +213,11 @@ export class InstagramReelsAdapter extends BaseAdapter {
             <div class="brd-fullscreen">
                 <div class="brd-card">
                     <h2>${label.emoji} ${label.label}!</h2>
-                    <p>Your scrolling score just hit ${this.session.cookedScore}. Your brain is getting crispy. Time to make a choice:</p>
+                    <p>Your scrolling score just hit ${Math.round(this.session.cookedScore)}. Your brain is getting crispy. Time to make a choice:</p>
                     <div class="brd-btn-row">
-                        <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going [->]</button>
-                        <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-                        <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
+                        <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
                     </div>
                 </div>
             </div>
@@ -304,8 +234,6 @@ export class InstagramReelsAdapter extends BaseAdapter {
         });
     }
 
-    /* ── "No you are not" overlay ───────────────────────── */
-
     protected showBuiltDifferentDeniedOverlay(): void {
         this.freezeFeed();
 
@@ -315,9 +243,9 @@ export class InstagramReelsAdapter extends BaseAdapter {
                     <h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2>
                     <p style="text-align:center;">You thought you could just scroll away? Pick one.</p>
                     <div class="brd-btn-row" style="justify-content:center;">
-                        <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-                        <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-                        <button class="brd-btn brd-btn-ghost" data-action="vibe">[?] Vibe Check</button>
+                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                        <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
                     </div>
                 </div>
             </div>
@@ -340,31 +268,27 @@ export class InstagramReelsAdapter extends BaseAdapter {
         });
     }
 
-    /* ── Skyrim overlay (max cooked, pack complete) ─────── */
-
     protected showSkyrimOverlay(message: string): void {
         const videoUrl = chrome.runtime.getURL("assets/skyrim-skeleton.mp4");
         this.freezeFeed();
 
         const wrapper = showOverlay("skyrim", `
             <div class="brd-fullscreen">
-                <div class="brd-video-wrap">
-                    <video playsinline></video>
-                </div>
+                <div class="brd-video-wrap"><video playsinline></video></div>
                 <div class="brd-message">${message}</div>
                 <div class="brd-btn-row">
-                    <button class="brd-btn brd-btn-success" data-action="grass">[*] Touch Grass (5 min)</button>
-                    <button class="brd-btn brd-btn-primary" data-action="pack">[#] Start Pack</button>
-                    <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different [+]</button>
+                    <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                    <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                    <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different</button>
                 </div>
             </div>
         `);
 
-        const video = wrapper.querySelector("video");
+        const video = wrapper.querySelector("video") as HTMLVideoElement | null;
         if (video) {
             video.src = videoUrl;
             video.load();
-            video.play().catch(() => { });
+            video.play().catch(() => undefined);
         }
 
         wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
@@ -384,14 +308,12 @@ export class InstagramReelsAdapter extends BaseAdapter {
         });
     }
 
-    /* ── Touch Grass overlay ─────────────────────────────── */
-
     protected showTouchGrassOverlay(): void {
         const endTime = this.session.touchGrass.endsAt;
-        const tips = TOUCH_GRASS_TIPS.sort(() => Math.random() - 0.5).slice(0, 3);
+        const tips = TOUCH_GRASS_TIPS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
         this.freezeFeed();
 
-        const ZEN_IMAGES = [
+        const zenImages = [
             "https://cataas.com/cat?width=900&height=700&t=1",
             "https://cataas.com/cat?width=900&height=700&t=2",
             "https://cataas.com/cat?width=900&height=700&t=3",
@@ -401,8 +323,7 @@ export class InstagramReelsAdapter extends BaseAdapter {
             "https://cataas.com/cat?width=900&height=700&t=6",
         ];
 
-        const shuffled = [...ZEN_IMAGES].sort(() => Math.random() - 0.5);
-
+        const shuffled = [...zenImages].sort(() => Math.random() - 0.5);
         const wrapper = showOverlay("touchgrass", `
             <div class="brd-fullscreen brd-zen-bg">
                 <div class="brd-zen-slide-wrap">
@@ -411,13 +332,11 @@ export class InstagramReelsAdapter extends BaseAdapter {
                     <div class="brd-zen-caption"></div>
                 </div>
                 <div class="brd-zen-card">
-                    <div class="brd-zen-header">[*] Touch Grass Mode</div>
+                    <div class="brd-zen-header">Touch Grass Mode</div>
                     <div class="brd-timer" id="brd-tg-timer">00:00</div>
-                    <div class="brd-tips">
-                        ${tips.map((t) => `<div class="brd-tip">${t}</div>`).join("")}
-                    </div>
+                    <div class="brd-tips">${tips.map((tip) => `<div class="brd-tip">${tip}</div>`).join("")}</div>
                     <div class="brd-btn-row" style="justify-content:center;">
-                        <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass (will be logged)</button>
+                        <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass</button>
                     </div>
                 </div>
             </div>
@@ -429,13 +348,19 @@ export class InstagramReelsAdapter extends BaseAdapter {
         let webcamStream: MediaStream | null = null;
         let slideIndex = 0;
 
-        const ZEN_CAPTIONS = [
-            "breathe.", "you are here.", "it's okay.", "look at this.",
-            "touch grass.", "be present.", "slow down.", "this is real life.",
+        const captions = [
+            "breathe.",
+            "you are here.",
+            "it's okay.",
+            "look at this.",
+            "touch grass.",
+            "be present.",
+            "slow down.",
+            "this is real life.",
         ];
 
-        const showSlide = async (idx: number) => {
-            const src = shuffled[idx % shuffled.length];
+        const showSlide = async (index: number) => {
+            const src = shuffled[index % shuffled.length];
             if (src === "WEBCAM") {
                 imgEl.style.display = "none";
                 webcamEl.style.display = "block";
@@ -445,67 +370,69 @@ export class InstagramReelsAdapter extends BaseAdapter {
                         webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                         webcamEl.srcObject = webcamStream;
                     } catch {
-                        showSlide(idx + 1);
+                        await showSlide(index + 1);
                     }
                 }
-            } else {
-                webcamEl.style.display = "none";
-                imgEl.style.display = "block";
-                imgEl.src = src;
-                captionEl.textContent = ZEN_CAPTIONS[Math.floor(Math.random() * ZEN_CAPTIONS.length)];
+                return;
             }
+
+            webcamEl.style.display = "none";
+            imgEl.style.display = "block";
+            imgEl.src = src;
+            captionEl.textContent = captions[Math.floor(Math.random() * captions.length)];
         };
 
         showSlide(slideIndex);
-        const slideInterval = setInterval(() => {
+        const slideInterval = window.setInterval(() => {
             slideIndex++;
-            showSlide(slideIndex);
+            void showSlide(slideIndex);
         }, 4000);
 
-        const timerEl = wrapper.querySelector("#brd-tg-timer");
-        const timerInterval = setInterval(() => {
+        const timerEl = wrapper.querySelector("#brd-tg-timer") as HTMLElement | null;
+        const timerInterval = window.setInterval(() => {
             const remaining = Math.max(0, endTime - Date.now());
-            const min = Math.floor(remaining / 60_000);
-            const sec = Math.floor((remaining % 60_000) / 1_000);
-            if (timerEl) timerEl.textContent = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+            const minutes = Math.floor(remaining / 60_000);
+            const seconds = Math.floor((remaining % 60_000) / 1_000);
+            if (timerEl) {
+                timerEl.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+            }
+
             if (remaining <= 0) {
                 clearInterval(timerInterval);
                 clearInterval(slideInterval);
-                if (webcamStream) webcamStream.getTracks().forEach((t) => t.stop());
+                if (webcamStream) webcamStream.getTracks().forEach((track) => track.stop());
                 this.endTouchGrass();
                 this.thawFeed();
                 removeOverlay("touchgrass");
             }
         }, 1000);
 
+        this.addCleanup(() => clearInterval(slideInterval));
+        this.addCleanup(() => clearInterval(timerInterval));
         wrapper.querySelector("[data-action='bypass']")?.addEventListener("click", () => {
             clearInterval(timerInterval);
             clearInterval(slideInterval);
-            if (webcamStream) webcamStream.getTracks().forEach((t) => t.stop());
+            if (webcamStream) webcamStream.getTracks().forEach((track) => track.stop());
             this.bypassTouchGrass();
             this.thawFeed();
             removeOverlay("touchgrass");
         });
     }
 
-    /* ── Vibe Check overlay ─────────────────────────────── */
-
     protected showVibeCheckOverlay(): void {
-        const vibes = VIBE_OPTIONS.map((v) => `
-            <div class="brd-vibe-card" data-vibe="${v.id}">
-                <span class="brd-vibe-emoji">${v.emoji}</span>
-                <span class="brd-vibe-label">${v.label}</span>
+        const vibes = VIBE_OPTIONS.map((vibe) => `
+            <div class="brd-vibe-card" data-vibe="${vibe.id}">
+                <span class="brd-vibe-emoji">${vibe.emoji}</span>
+                <span class="brd-vibe-label">${vibe.label}</span>
             </div>
         `).join("");
 
         const wrapper = showOverlay("vibecheck", `
             <div class="brd-fullscreen">
                 <div class="brd-card">
-                    <h2>[?] Vibe Check</h2>
+                    <h2>Vibe Check</h2>
                     <p>What are you here for?</p>
-                    <div class="brd-vibe-grid">
-                        ${vibes}
-                    </div>
+                    <div class="brd-vibe-grid">${vibes}</div>
                     <div class="brd-btn-row" style="justify-content:center;">
                         <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
                     </div>
@@ -513,20 +440,14 @@ export class InstagramReelsAdapter extends BaseAdapter {
             </div>
         `);
 
-        wrapper.querySelectorAll("[data-vibe]").forEach((el) => {
-            el.addEventListener("click", () => {
-                const intent = (el as HTMLElement).dataset.vibe as VibeIntent;
-                this.setVibeIntent(intent);
+        wrapper.querySelectorAll("[data-vibe]").forEach((element) => {
+            element.addEventListener("click", () => {
+                this.setVibeIntent((element as HTMLElement).dataset.vibe as VibeIntent);
                 removeOverlay("vibecheck");
             });
         });
-
-        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => {
-            removeOverlay("vibecheck");
-        });
+        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
     }
-
-    /* ── Cleanup ────────────────────────────────────────── */
 
     protected removeAllOverlays(): void {
         removeAll();

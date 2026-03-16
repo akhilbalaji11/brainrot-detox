@@ -130,6 +130,9 @@ export const IDLE_DECAY_THRESHOLD_MS = 15_000;
 export const TICK_FAST_MS = 500;
 export const TICK_IDLE_MS = 3000;
 export const ACTIVITY_THRESHOLD_MS = 2000;
+export const VELOCITY_WINDOW_MS = 4000;
+export const VELOCITY_MULTIPLIER_COEFFICIENT = 0.35;
+export const VELOCITY_MULTIPLIER_MAX = 3;
 
 /* ── Default widget position ─────────────────────────── */
 export const DEFAULT_WIDGET_POSITION: WidgetPosition = { edge: "right", verticalOffset: 20 };

@@ -1,141 +1,256 @@
 import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
 import { getCookedLabel } from "@/core/cooked-meter";
-import { getPackProgress } from "@/core/snack-packs";
-import type { CookedStatus, VibeIntent } from "@/core/types";
-import { initWidgetPosition, removeAllOverlays as removeAll, removeOverlay, setupWidgetDrag, showOverlay, updateWidgetOverlay } from "../overlays/overlay-manager";
+import type { VibeIntent } from "@/core/types";
+import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
-/**
- * YouTube adapter (homepage + watch pages)
- * Monitors scroll depth, feed item rendering, and video endings.
- */
 export class YouTubeAdapter extends BaseAdapter {
     readonly site = "youtube" as const;
+
     private itemsSinceLastTick = 0;
     private lastSeenItems = 0;
 
+    private readonly handleRuntimeMessage = (msg: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+        if (msg.type === "END_TOUCH_GRASS") {
+            this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 };
+            removeOverlay("skyrim");
+            removeOverlay("touchgrass");
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_TOUCH_GRASS") {
+            this.startTouchGrass(msg.payload?.minutes ?? 5);
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_PACK") {
+            this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10);
+            sendResponse({ success: true });
+            return false;
+        }
+
+        if (msg.type === "TRIGGER_VIBE_CHECK") {
+            this.showVibeCheckOverlay();
+            sendResponse({ success: true });
+            return false;
+        }
+
+        return false;
+    };
+
     protected setupObservers(): void {
-        window.addEventListener("scroll", () => { this.scrollCount++; this.recordActivity(); }, { passive: true });
+        this.registerEventListener(window, "scroll", () => {
+            this.scrollCount++;
+            this.recordActivity();
+        }, { passive: true });
 
-        // Watch for new feed items
-        const observer = new MutationObserver(() => {
-            const items = document.querySelectorAll("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer");
-            if (items.length > this.lastSeenItems) {
-                this.itemsSinceLastTick += items.length - this.lastSeenItems;
-                this.lastSeenItems = items.length;
-            }
-        });
-
-        const tryObserve = () => {
+        const observeFeed = () => {
             const feed = document.querySelector("ytd-browse, ytd-search, ytd-watch-flexy, #content") || document.body;
-            observer.observe(feed, { childList: true, subtree: true });
+            this.registerMutationObserver(feed, { childList: true, subtree: true }, () => {
+                const items = document.querySelectorAll("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer");
+                if (items.length > this.lastSeenItems) {
+                    this.itemsSinceLastTick += items.length - this.lastSeenItems;
+                    this.lastSeenItems = items.length;
+                }
+            });
         };
-        if (document.readyState === "complete") tryObserve();
-        else window.addEventListener("load", tryObserve);
 
-        // Navigation changes (YouTube SPA)
-        window.addEventListener("yt-navigate-finish", () => {
+        if (document.readyState === "complete") {
+            observeFeed();
+        } else {
+            this.registerEventListener(window, "load", observeFeed, { once: true });
+        }
+
+        this.registerEventListener(window, "yt-navigate-finish", () => {
             this.lastSeenItems = 0;
         });
 
-        // Listen for messages from popup
-        chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-            if (msg.type === "END_TOUCH_GRASS") { this.session.touchGrass = { active: false, endsAt: 0, bypassCount: 0 }; removeOverlay("skyrim"); removeOverlay("touchgrass"); sendResponse({ success: true }); return false; }
-            if (msg.type === "TRIGGER_TOUCH_GRASS") { this.startTouchGrass(msg.payload?.minutes ?? 5); sendResponse({ success: true }); return false; }
-            if (msg.type === "TRIGGER_PACK") { this.startPack(msg.payload?.mode ?? "items", msg.payload?.limit ?? 10); sendResponse({ success: true }); return false; }
-            if (msg.type === "TRIGGER_VIBE_CHECK") { this.showVibeCheckOverlay(); sendResponse({ success: true }); return false; }
-            return false;
-        });
+        this.registerRuntimeMessageListener(this.handleRuntimeMessage);
     }
 
     protected getNewItemsSinceLastTick(): number {
-        const c = this.itemsSinceLastTick;
+        const count = this.itemsSinceLastTick;
         this.itemsSinceLastTick = 0;
-        return c;
+        return count;
     }
 
-    protected async mountCookedWidget(): Promise<void> { await initWidgetPosition(this.site); this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus); }
+    protected mountCookedWidget(): void {
+        this.renderCookedWidget(this.session.cookedScore, this.session.cookedStatus);
+    }
 
     protected updateCookedWidget(score: number, status: string): void {
-        const label = getCookedLabel(status as CookedStatus);
-        const scoreClass = status === "Based" ? "brd-score-based" : status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";
-        let packHtml = "";
-        if (this.session.packState.active) {
-            const p = getPackProgress(this.session.packState);
-            const packLabel = this.session.packState.mode === "time" && p.timeRemaining
-                ? `[#] Pack: ${p.timeRemaining}`
-                : `[#] Pack: ${p.current}/${p.total}`;
-            packHtml = `<div style="width:100%;margin-top:6px;"><div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">${packLabel}</div><div class="brd-pack-bar"><div class="brd-pack-fill" style="width:${p.percent}%"></div></div></div>`;
-        }
-
-        // Check if widget already exists
-        const widgetExists = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`);
-
-        if (widgetExists) {
-            // Update existing widget in-place
-            updateWidgetOverlay(score, status, packHtml);
-            // Re-attach click handler for vibe check
-            const widget = document.querySelector(`#brd-overlay-host [data-overlay="widget"] .brd-widget`) as HTMLElement;
-            if (widget) {
-                widget.style.cursor = "pointer";
-                widget.onclick = () => this.showVibeCheckOverlay();
-            }
-        } else {
-            // Create new widget
-            const w = showOverlay("widget", `<div class="brd-widget"><span class="brd-widget-emoji">${label.emoji}</span><span class="brd-widget-label">${label.label}</span><span class="brd-widget-score ${scoreClass}">${score}</span>${packHtml}</div>`);
-            const el = w.querySelector(".brd-widget") as HTMLElement;
-            if (el) { el.style.cursor = "pointer"; el.onclick = () => this.showVibeCheckOverlay(); }
-            const widget = w.querySelector(".brd-widget") as HTMLElement;
-            if (widget) setupWidgetDrag(widget, this.site);
-        }
+        this.renderCookedWidget(score, status);
     }
 
     protected showInterventionOverlay(): void {
         const label = getCookedLabel(this.session.cookedStatus);
-        const w = showOverlay("intervention", `<div class="brd-fullscreen"><div class="brd-card"><h2>${label.emoji} ${label.label}!</h2><p>Your scrolling score hit ${this.session.cookedScore}. Time to make a choice:</p><div class="brd-btn-row"><button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going 🤷</button><button class="brd-btn brd-btn-primary" data-action="pack">Start Pack 🍱</button><button class="brd-btn brd-btn-success" data-action="grass">Touch Grass 🌿</button></div></div></div>`);
-        w.querySelector("[data-action='dismiss']")?.addEventListener("click", () => removeOverlay("intervention"));
-        w.querySelector("[data-action='pack']")?.addEventListener("click", () => { removeOverlay("intervention"); this.startPack("items", 10); });
-        w.querySelector("[data-action='grass']")?.addEventListener("click", () => { removeOverlay("intervention"); this.startTouchGrass(this.settings.touchGrass.defaultMinutes); });
+        const wrapper = showOverlay("intervention", `
+            <div class="brd-fullscreen">
+                <div class="brd-card">
+                    <h2>${label.emoji} ${label.label}!</h2>
+                    <p>Your scrolling score hit ${Math.round(this.session.cookedScore)}. Time to make a choice:</p>
+                    <div class="brd-btn-row">
+                        <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
+                        <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelector("[data-action='dismiss']")?.addEventListener("click", () => removeOverlay("intervention"));
+        wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
+            removeOverlay("intervention");
+            this.startPack("items", 10);
+        });
+        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+            removeOverlay("intervention");
+            this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+        });
     }
 
     protected showSkyrimOverlay(message: string): void {
         const videoUrl = chrome.runtime.getURL("assets/skyrim-skeleton.mp4");
-        const w = showOverlay("skyrim", `<div class="brd-fullscreen"><div class="brd-video-wrap"><video autoplay muted playsinline><source src="${videoUrl}" type="video/mp4"></video></div><div class="brd-message">${message}</div><div class="brd-btn-row"><button class="brd-btn brd-btn-success" data-action="grass">🌿 Touch Grass</button><button class="brd-btn brd-btn-primary" data-action="pack">🍱 Start Pack</button><button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different 💪</button></div></div>`);
-        w.querySelector("video")?.play().catch(() => { });
-        w.querySelector("[data-action='grass']")?.addEventListener("click", () => { removeOverlay("skyrim"); this.startTouchGrass(this.settings.touchGrass.defaultMinutes); });
-        w.querySelector("[data-action='pack']")?.addEventListener("click", () => { removeOverlay("skyrim"); this.startPack("items", 10); });
-        w.querySelector("[data-action='dismiss']")?.addEventListener("click", () => removeOverlay("skyrim"));
+        const wrapper = showOverlay("skyrim", `
+            <div class="brd-fullscreen">
+                <div class="brd-video-wrap">
+                    <video autoplay muted playsinline>
+                        <source src="${videoUrl}" type="video/mp4" />
+                    </video>
+                </div>
+                <div class="brd-message">${message}</div>
+                <div class="brd-btn-row">
+                    <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                    <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                    <button class="brd-btn brd-btn-ghost" data-action="dismiss">I'm Built Different</button>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelector("video")?.play().catch(() => undefined);
+        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+            removeOverlay("skyrim");
+            this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+        });
+        wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
+            removeOverlay("skyrim");
+            this.startPack("items", 10);
+        });
+        wrapper.querySelector("[data-action='dismiss']")?.addEventListener("click", () => {
+            removeOverlay("skyrim");
+            this.builtDifferentDismissed = true;
+        });
     }
 
     protected showTouchGrassOverlay(): void {
         const endTime = this.session.touchGrass.endsAt;
-        const tips = TOUCH_GRASS_TIPS.sort(() => Math.random() - 0.5).slice(0, 3);
+        const tips = TOUCH_GRASS_TIPS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
         const videoUrl = chrome.runtime.getURL("assets/skyrim-skeleton.mp4");
-        const w = showOverlay("touchgrass", `<div class="brd-fullscreen"><div class="brd-video-wrap"><video autoplay loop muted playsinline><source src="${videoUrl}" type="video/mp4"></video></div><div class="brd-card"><h2>🌿 Touch Grass Mode</h2><p>Feed locked. Time to go outside.</p><div class="brd-timer" id="brd-tg-timer">00:00</div><div class="brd-tips">${tips.map(t => `<div class="brd-tip">${t}</div>`).join("")}</div><div class="brd-btn-row" style="justify-content:center;"><button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass 😏</button></div></div></div>`);
-        const timerEl = w.querySelector("#brd-tg-timer");
-        const interval = setInterval(() => {
-            const rem = Math.max(0, endTime - Date.now());
-            const m = Math.floor(rem / 60000); const s = Math.floor((rem % 60000) / 1000);
-            if (timerEl) timerEl.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-            if (rem <= 0) { clearInterval(interval); this.endTouchGrass(); removeOverlay("touchgrass"); }
+        const wrapper = showOverlay("touchgrass", `
+            <div class="brd-fullscreen">
+                <div class="brd-video-wrap">
+                    <video autoplay loop muted playsinline>
+                        <source src="${videoUrl}" type="video/mp4" />
+                    </video>
+                </div>
+                <div class="brd-card">
+                    <h2>Touch Grass Mode</h2>
+                    <p>Feed locked. Time to go outside.</p>
+                    <div class="brd-timer" id="brd-tg-timer">00:00</div>
+                    <div class="brd-tips">${tips.map((tip) => `<div class="brd-tip">${tip}</div>`).join("")}</div>
+                    <div class="brd-btn-row" style="justify-content:center;">
+                        <button class="brd-btn brd-btn-danger" data-action="bypass">Emergency Bypass</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        const timerEl = wrapper.querySelector("#brd-tg-timer") as HTMLElement | null;
+        const interval = window.setInterval(() => {
+            const remaining = Math.max(0, endTime - Date.now());
+            const minutes = Math.floor(remaining / 60_000);
+            const seconds = Math.floor((remaining % 60_000) / 1_000);
+            if (timerEl) {
+                timerEl.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+            }
+            if (remaining <= 0) {
+                clearInterval(interval);
+                this.endTouchGrass();
+                removeOverlay("touchgrass");
+            }
         }, 1000);
-        w.querySelector("[data-action='bypass']")?.addEventListener("click", () => { clearInterval(interval); this.bypassTouchGrass(); removeOverlay("touchgrass"); });
-        w.querySelector("video")?.play().catch(() => { });
+
+        this.addCleanup(() => clearInterval(interval));
+        wrapper.querySelector("[data-action='bypass']")?.addEventListener("click", () => {
+            clearInterval(interval);
+            this.bypassTouchGrass();
+            removeOverlay("touchgrass");
+        });
+        wrapper.querySelector("video")?.play().catch(() => undefined);
     }
 
     protected showVibeCheckOverlay(): void {
-        const vibes = VIBE_OPTIONS.map(v => `<div class="brd-vibe-card" data-vibe="${v.id}"><span class="brd-vibe-emoji">${v.emoji}</span><span class="brd-vibe-label">${v.label}</span></div>`).join("");
-        const w = showOverlay("vibecheck", `<div class="brd-fullscreen"><div class="brd-card"><h2>✨ Vibe Check</h2><p>What are you here for?</p><div class="brd-vibe-grid">${vibes}</div><div class="brd-btn-row" style="justify-content:center;"><button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button></div></div></div>`);
-        w.querySelectorAll("[data-vibe]").forEach(el => el.addEventListener("click", () => { this.setVibeIntent((el as HTMLElement).dataset.vibe as VibeIntent); removeOverlay("vibecheck"); }));
-        w.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
+        const vibes = VIBE_OPTIONS.map((vibe) => `
+            <div class="brd-vibe-card" data-vibe="${vibe.id}">
+                <span class="brd-vibe-emoji">${vibe.emoji}</span>
+                <span class="brd-vibe-label">${vibe.label}</span>
+            </div>
+        `).join("");
+
+        const wrapper = showOverlay("vibecheck", `
+            <div class="brd-fullscreen">
+                <div class="brd-card">
+                    <h2>Vibe Check</h2>
+                    <p>What are you here for?</p>
+                    <div class="brd-vibe-grid">${vibes}</div>
+                    <div class="brd-btn-row" style="justify-content:center;">
+                        <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelectorAll("[data-vibe]").forEach((element) => {
+            element.addEventListener("click", () => {
+                this.setVibeIntent((element as HTMLElement).dataset.vibe as VibeIntent);
+                removeOverlay("vibecheck");
+            });
+        });
+        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
     }
 
     protected showBuiltDifferentDeniedOverlay(): void {
-        const w = showOverlay("denied", `<div class="brd-fullscreen"><div class="brd-card"><h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2><p style="text-align:center;">You thought you could just scroll away? Pick one.</p><div class="brd-btn-row" style="justify-content:center;"><button class="brd-btn brd-btn-success" data-action="grass">🌿 Touch Grass (5 min)</button><button class="brd-btn brd-btn-primary" data-action="pack">🍱 Start Pack</button><button class="brd-btn brd-btn-ghost" data-action="vibe">✨ Vibe Check</button></div></div></div>`);
-        w.querySelector("[data-action='grass']")?.addEventListener("click", () => { removeOverlay("denied"); this.startTouchGrass(this.settings.touchGrass.defaultMinutes); });
-        w.querySelector("[data-action='pack']")?.addEventListener("click", () => { removeOverlay("denied"); this.startPack("items", 10); });
-        w.querySelector("[data-action='vibe']")?.addEventListener("click", () => { removeOverlay("denied"); this.showVibeCheckOverlay(); });
+        const wrapper = showOverlay("denied", `
+            <div class="brd-fullscreen">
+                <div class="brd-card">
+                    <h2 style="font-size:28px;text-align:center;color:#f87171;">No you are not.</h2>
+                    <p style="text-align:center;">You thought you could just scroll away? Pick one.</p>
+                    <div class="brd-btn-row" style="justify-content:center;">
+                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                        <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+        });
+        wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.startPack("items", 10);
+        });
+        wrapper.querySelector("[data-action='vibe']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.showVibeCheckOverlay();
+        });
     }
 
-    protected removeAllOverlays(): void { removeAll(); }
+    protected removeAllOverlays(): void {
+        removeAll();
+    }
 }

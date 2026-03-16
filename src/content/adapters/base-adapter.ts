@@ -1,20 +1,52 @@
-import { DEFAULT_PACK_STATE, DEFAULT_TOUCH_GRASS, TICK_FAST_MS, TICK_IDLE_MS, ACTIVITY_THRESHOLD_MS } from "@/core/constants";
-import { computeInstantScore, computeRollingScore, computeShortsCookedScore, deriveCookedStatus, isMaxCooked, shouldIntervene } from "@/core/cooked-meter";
+import {
+    ACTIVITY_THRESHOLD_MS,
+    DEFAULT_PACK_STATE,
+    DEFAULT_TOUCH_GRASS,
+    TICK_FAST_MS,
+    TICK_IDLE_MS,
+    VELOCITY_MULTIPLIER_COEFFICIENT,
+    VELOCITY_MULTIPLIER_MAX,
+    VELOCITY_WINDOW_MS,
+} from "@/core/constants";
+import {
+    computeInstantScore,
+    computeRollingScore,
+    computeShortsCookedScore,
+    deriveCookedStatus,
+    isMaxCooked,
+    shouldIntervene,
+} from "@/core/cooked-meter";
 import { sendMessage } from "@/core/messaging";
-import { incrementPack, isPackComplete } from "@/core/snack-packs";
+import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
 import type { SessionState, SettingsState, SiteKey, VibeIntent } from "@/core/types";
+import { initWidgetPosition, mountOrUpdateWidget } from "../overlays/overlay-manager";
 
-/**
- * Abstract base adapter – handles lifecycle, cooked meter ticking,
- * pack counting, and overlay triggers. Subclasses implement site-specific
- * DOM observation.
- */
+type RuntimeMessageListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
+
+interface VelocitySample {
+    at: number;
+    units: number;
+}
+
+const LOCATION_CHANGE_EVENT = "brd:locationchange";
+
+interface LocationChangePatch {
+    refCount: number;
+    popstateListener: () => void;
+    originalPushState: History["pushState"];
+    originalReplaceState: History["replaceState"];
+}
+
+interface LocationChangeWindow extends Window {
+    __brdLocationChangePatch?: LocationChangePatch;
+}
+
 export abstract class BaseAdapter {
     abstract readonly site: SiteKey;
+
     protected settings!: SettingsState;
     protected session!: SessionState;
     protected enabled = false;
-    private tickTimer: number | null = null;
     protected lastSignalAt = 0;
     protected lastActivityAt = 0;
     protected scrollCount = 0;
@@ -22,9 +54,15 @@ export abstract class BaseAdapter {
     protected maxCookedShown = false;
     protected builtDifferentDismissed = false;
 
-    /* ── Lifecycle ────────────────────────────────────────── */
+    private tickTimer: number | null = null;
+    private cleanupFns: Array<() => void> = [];
+    private velocitySamples: VelocitySample[] = [];
 
     async init() {
+        if (this.enabled) {
+            this.destroy();
+        }
+
         try {
             const settingsRes = await sendMessage({ type: "GET_SETTINGS" });
             if (!settingsRes.success) return;
@@ -35,11 +73,10 @@ export abstract class BaseAdapter {
                 return;
             }
 
-            // Create or restore session
             const tab = await this.getCurrentTabId();
-            let sessionRes = await sendMessage({ type: "GET_SESSION", payload: { tabId: tab } });
+            const sessionRes = await sendMessage({ type: "GET_SESSION", payload: { tabId: tab } });
+
             if (!sessionRes.data) {
-                // Create new session
                 this.session = {
                     site: this.site,
                     tabId: tab,
@@ -59,22 +96,20 @@ export abstract class BaseAdapter {
             }
 
             this.enabled = true;
-            console.log(`[brainrot detox] ${this.site} adapter initialized`);
-
-            // Mount initial widget
-            this.mountCookedWidget();
-
-            // Setup observers
-            this.setupObservers();
-
-            // Start tick loop
+            this.lastSignalAt = 0;
             this.lastActivityAt = Date.now();
+            this.velocitySamples = [];
+
+            await initWidgetPosition(this.site);
+            this.mountCookedWidget();
+            this.setupObservers();
             this.scheduleNextTick();
 
-            // Check if touch grass was already active
             if (this.session.touchGrass.active && this.session.touchGrass.endsAt > Date.now()) {
                 this.showTouchGrassOverlay();
             }
+
+            console.log(`[brainrot detox] ${this.site} adapter initialized`);
         } catch (err) {
             console.error(`[brainrot detox] Init error for ${this.site}:`, err);
         }
@@ -82,56 +117,201 @@ export abstract class BaseAdapter {
 
     destroy() {
         this.enabled = false;
-        if (this.tickTimer) clearTimeout(this.tickTimer);
+
+        if (this.tickTimer !== null) {
+            clearTimeout(this.tickTimer);
+            this.tickTimer = null;
+        }
+
+        while (this.cleanupFns.length > 0) {
+            const cleanup = this.cleanupFns.pop();
+            try {
+                cleanup?.();
+            } catch (err) {
+                console.warn(`[brainrot detox] Cleanup error for ${this.site}:`, err);
+            }
+        }
+
+        this.velocitySamples = [];
         this.removeAllOverlays();
     }
 
-    /* ── Adaptive tick scheduling ───────────────────────────── */
-
     protected scheduleNextTick() {
-        if (this.tickTimer) clearTimeout(this.tickTimer);
+        if (!this.enabled) return;
 
-        const now = Date.now();
-        const timeSinceActivity = now - this.lastActivityAt;
-        const useFastTick = timeSinceActivity < ACTIVITY_THRESHOLD_MS;
-        const interval = useFastTick ? TICK_FAST_MS : TICK_IDLE_MS;
+        if (this.tickTimer !== null) {
+            clearTimeout(this.tickTimer);
+        }
 
-        this.tickTimer = window.setTimeout(() => {
-            this.tick();
+        const interval = Date.now() - this.lastActivityAt < ACTIVITY_THRESHOLD_MS ? TICK_FAST_MS : TICK_IDLE_MS;
+        this.tickTimer = window.setTimeout(async () => {
+            await this.tick();
             this.scheduleNextTick();
         }, interval);
     }
 
-    protected recordActivity() {
-        this.lastActivityAt = Date.now();
+    protected recordActivity(at: number = Date.now()) {
+        this.lastActivityAt = at;
     }
 
-    /* ── Abstract methods subclasses must implement ──────── */
+    protected recordSignalUnits(units: number, at: number = Date.now()) {
+        if (units <= 0) return;
+        this.velocitySamples.push({ at, units });
+        this.lastSignalAt = at;
+        this.recordActivity(at);
+        this.pruneVelocitySamples(at);
+    }
 
-    /** Set up DOM observation (scroll, navigation, feed items) */
-    protected abstract setupObservers(): void;
+    protected recordSuccessfulNavigation(units: number = 1, at: number = Date.now()) {
+        if (units <= 0) return;
+        this.swipeCount += units;
+        this.recordSignalUnits(units, at);
+    }
 
-    /** Mount the floating cooked widget at the right position */
-    protected abstract mountCookedWidget(): void;
+    protected getVelocityMultiplier(now: number = Date.now()): number {
+        this.pruneVelocitySamples(now);
+        const totalUnits = this.velocitySamples.reduce((sum, sample) => sum + sample.units, 0);
+        const rate = totalUnits / (VELOCITY_WINDOW_MS / 1000);
+        return Math.min(
+            VELOCITY_MULTIPLIER_MAX,
+            1 + VELOCITY_MULTIPLIER_COEFFICIENT * Math.pow(rate, 1.5)
+        );
+    }
 
-    /** Get the number of new items seen since last tick */
-    protected abstract getNewItemsSinceLastTick(): number;
+    protected addCleanup(cleanup: () => void) {
+        this.cleanupFns.push(cleanup);
+    }
 
-    /* ── Tick loop ──────────────────────────────────────── */
+    protected registerEventListener(
+        target: EventTarget,
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions
+    ) {
+        target.addEventListener(type, listener, options);
+        this.addCleanup(() => target.removeEventListener(type, listener, options));
+    }
+
+    protected registerMutationObserver(
+        target: Node,
+        options: MutationObserverInit,
+        callback: MutationCallback
+    ): MutationObserver {
+        const observer = new MutationObserver(callback);
+        observer.observe(target, options);
+        this.addCleanup(() => observer.disconnect());
+        return observer;
+    }
+
+    protected registerInterval(callback: () => void, ms: number): number {
+        const id = window.setInterval(callback, ms);
+        this.addCleanup(() => clearInterval(id));
+        return id;
+    }
+
+    protected registerRuntimeMessageListener(listener: RuntimeMessageListener) {
+        chrome.runtime.onMessage.addListener(listener);
+        this.addCleanup(() => chrome.runtime.onMessage.removeListener(listener));
+    }
+
+    protected registerLocationChangeListener(listener: () => void) {
+        const patchedWindow = window as LocationChangeWindow;
+        let patch = patchedWindow.__brdLocationChangePatch;
+
+        if (!patch) {
+            const dispatchLocationChange = () => window.dispatchEvent(new Event(LOCATION_CHANGE_EVENT));
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+
+            history.pushState = function (...args) {
+                const result = originalPushState.apply(history, args as Parameters<History["pushState"]>);
+                dispatchLocationChange();
+                return result;
+            } as History["pushState"];
+
+            history.replaceState = function (...args) {
+                const result = originalReplaceState.apply(history, args as Parameters<History["replaceState"]>);
+                dispatchLocationChange();
+                return result;
+            } as History["replaceState"];
+
+            window.addEventListener("popstate", dispatchLocationChange);
+            patch = {
+                refCount: 0,
+                popstateListener: dispatchLocationChange,
+                originalPushState,
+                originalReplaceState,
+            };
+            patchedWindow.__brdLocationChangePatch = patch;
+        }
+
+        patch.refCount++;
+        window.addEventListener(LOCATION_CHANGE_EVENT, listener);
+
+        this.addCleanup(() => {
+            window.removeEventListener(LOCATION_CHANGE_EVENT, listener);
+
+            const currentPatch = patchedWindow.__brdLocationChangePatch;
+            if (!currentPatch) return;
+
+            currentPatch.refCount--;
+            if (currentPatch.refCount > 0) return;
+
+            history.pushState = currentPatch.originalPushState;
+            history.replaceState = currentPatch.originalReplaceState;
+            window.removeEventListener("popstate", currentPatch.popstateListener);
+            delete patchedWindow.__brdLocationChangePatch;
+        });
+    }
+
+    protected buildPackDisplay() {
+        if (!this.session.packState.active) return null;
+
+        const progress = getPackProgress(this.session.packState);
+        const label = this.session.packState.mode === "time" && progress.timeRemaining
+            ? `[#] Pack: ${progress.timeRemaining}`
+            : `[#] Pack: ${progress.current}/${progress.total}`;
+
+        return { label, percent: progress.percent };
+    }
+
+    protected renderCookedWidget(score: number, status: string) {
+        mountOrUpdateWidget({
+            siteKey: this.site,
+            score,
+            status,
+            pack: this.buildPackDisplay(),
+            onActivate: () => this.showVibeCheckOverlay(),
+        });
+    }
+
+    protected getGeneralVelocityUnits(newItems: number): number {
+        return newItems + this.scrollCount * 0.25;
+    }
+
+    protected computeGeneralBurstBonus(signalUnits: number, velocityMultiplier: number): number {
+        if (signalUnits <= 0) return 0;
+        return Math.max(0, velocityMultiplier - 1) * Math.min(12, signalUnits) * 0.6;
+    }
+
+    protected resetMomentum() {
+        this.velocitySamples = [];
+        this.lastSignalAt = 0;
+    }
 
     protected async tick() {
         if (!this.enabled) return;
 
         const now = Date.now();
+        const previousScore = this.session.cookedScore;
         const newItems = this.getNewItemsSinceLastTick();
+
         this.session.itemsConsumed += newItems;
         this.session.scrollEvents += this.scrollCount;
 
         const hasNewSignals = this.scrollCount > 0 || newItems > 0 || this.swipeCount > 0;
-        if (hasNewSignals) this.lastSignalAt = now;
         const idleMs = this.lastSignalAt === 0 ? 0 : now - this.lastSignalAt;
 
-        // "No you are not" — if user dismissed and then scrolled again, re-intervene
         if (this.builtDifferentDismissed && hasNewSignals) {
             this.builtDifferentDismissed = false;
             this.scrollCount = 0;
@@ -140,18 +320,19 @@ export abstract class BaseAdapter {
             return;
         }
 
-        // While a pack is active, freeze the cooked score — packs are separate
-        let newScore: number;
+        let newScore = previousScore;
+
         if (this.session.packState.active) {
-            newScore = this.session.cookedScore; // frozen
+            newScore = previousScore;
         } else if (this.site === "shorts") {
-            newScore = computeShortsCookedScore(
-                this.session.cookedScore,
-                this.swipeCount,
-                this.session.vibeIntent,
-                idleMs
-            );
+            const navigationGain = newItems * this.getVelocityMultiplier(now);
+            newScore = computeShortsCookedScore(previousScore, navigationGain, this.session.vibeIntent, idleMs);
         } else {
+            const velocityUnits = this.getGeneralVelocityUnits(newItems);
+            if (velocityUnits > 0) {
+                this.recordSignalUnits(velocityUnits, now);
+            }
+
             const sessionMin = (now - this.session.startedAt) / 60_000;
             const instant = computeInstantScore(
                 sessionMin,
@@ -159,23 +340,17 @@ export abstract class BaseAdapter {
                 this.session.scrollEvents,
                 this.session.itemsConsumed
             );
-            newScore = computeRollingScore(
-                this.session.cookedScore,
-                instant,
-                hasNewSignals,
-                idleMs,
-                this.session.vibeIntent
-            );
+            const velocityMultiplier = this.getVelocityMultiplier(now);
+            const rolling = computeRollingScore(previousScore, instant, hasNewSignals, idleMs, this.session.vibeIntent);
+            newScore = Math.min(100, rolling + this.computeGeneralBurstBonus(velocityUnits, velocityMultiplier));
         }
 
-        // Reset per-tick counters
         this.scrollCount = 0;
         this.swipeCount = 0;
 
         this.session.cookedScore = newScore;
         this.session.cookedStatus = deriveCookedStatus(newScore, this.settings.cooked.thresholds);
 
-        // Pack progress check
         if (this.session.packState.active) {
             this.session.packState = incrementPack(this.session.packState, newItems);
             if (isPackComplete(this.session.packState, now)) {
@@ -183,7 +358,6 @@ export abstract class BaseAdapter {
             }
         }
 
-        // Intervention check (only when not in a pack)
         if (!this.session.packState.active) {
             if (isMaxCooked(newScore)) {
                 if (!this.maxCookedShown) {
@@ -191,10 +365,8 @@ export abstract class BaseAdapter {
                     this.onMaxCooked();
                 }
             } else {
-                // Reset the max-cooked flag only when score drops well below 100
                 if (newScore < 95) this.maxCookedShown = false;
-                // Only trigger intervention when score is rising (not decaying from 100)
-                const scoreRising = newScore >= this.session.cookedScore;
+                const scoreRising = newScore >= previousScore;
                 if (scoreRising && shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)) {
                     this.session.lastInterventionAt = now;
                     this.onIntervention();
@@ -202,29 +374,13 @@ export abstract class BaseAdapter {
             }
         }
 
-        // Update widget display
         this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
-
-        // Persist session
-        const tab = this.session.tabId;
-        await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: tab, patch: this.session } });
+        await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: this.session } });
     }
 
-    /* ── Tab ID helper ──────────────────────────────────── */
-
-    private async getCurrentTabId(): Promise<number> {
-        return new Promise((resolve) => {
-            // Content scripts can use the sender tab id via background
-            // But a simpler approach: use a unique ID per instance
-            const id = Math.floor(Math.random() * 1_000_000);
-            // Try to get actual tab id
-            sendMessage({ type: "GET_CURRENT_TAB" }).then((res) => {
-                resolve(res.data?.id ?? id);
-            });
-        });
-    }
-
-    /* ── Overlay methods (called by tick, implemented via overlay-manager) ── */
+    protected abstract setupObservers(): void;
+    protected abstract mountCookedWidget(): void;
+    protected abstract getNewItemsSinceLastTick(): number;
 
     protected onIntervention() {
         sendMessage({ type: "LOG_EVENT", payload: { eventType: "intervention" } });
@@ -238,18 +394,16 @@ export abstract class BaseAdapter {
     }
 
     protected onPackComplete() {
-        // Re-enable score computation now that pack is done
         this.session.packState = { ...DEFAULT_PACK_STATE };
         this.maxCookedShown = false;
         sendMessage({ type: "END_PACK", payload: { tabId: this.session.tabId } });
         this.showSkyrimOverlay("[#] Pack Complete! Time to touch grass.");
+        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
     }
 
     protected onBuiltDifferentDenied() {
         this.showBuiltDifferentDeniedOverlay();
     }
-
-    /* ── Overlay abstract hooks ─────────────────────────── */
 
     protected abstract showInterventionOverlay(): void;
     protected abstract showTouchGrassOverlay(): void;
@@ -259,16 +413,15 @@ export abstract class BaseAdapter {
     protected abstract updateCookedWidget(score: number, status: string): void;
     protected abstract removeAllOverlays(): void;
 
-    /* ── Public actions (called by overlays / popup) ─────── */
-
     async startPack(mode: "items" | "time", limit: number) {
         await sendMessage({ type: "START_PACK", payload: { tabId: this.session.tabId, mode, limit } });
         this.session.packState = { active: true, mode, limit, consumed: 0, startedAt: Date.now() };
-        // Reset cooked score to 0 — packs are a fresh start
         this.session.cookedScore = 0;
         this.session.cookedStatus = "Based";
         this.maxCookedShown = false;
         this.builtDifferentDismissed = false;
+        this.resetMomentum();
+        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
     }
 
     async startTouchGrass(minutes: number) {
@@ -280,11 +433,12 @@ export abstract class BaseAdapter {
     async endTouchGrass() {
         await sendMessage({ type: "END_TOUCH_GRASS", payload: { tabId: this.session.tabId } });
         this.session.touchGrass = { ...DEFAULT_TOUCH_GRASS };
-        // Reset cooked score after completing touch grass
         this.session.cookedScore = 0;
         this.session.cookedStatus = "Based";
         this.maxCookedShown = false;
+        this.resetMomentum();
         this.removeAllOverlays();
+        this.mountCookedWidget();
     }
 
     async bypassTouchGrass() {
@@ -297,5 +451,18 @@ export abstract class BaseAdapter {
         this.session.vibeIntent = intent;
         sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: { vibeIntent: intent } } });
         sendMessage({ type: "LOG_EVENT", payload: { eventType: "vibe_check" } });
+    }
+
+    private pruneVelocitySamples(now: number = Date.now()) {
+        this.velocitySamples = this.velocitySamples.filter((sample) => now - sample.at <= VELOCITY_WINDOW_MS);
+    }
+
+    private async getCurrentTabId(): Promise<number> {
+        return new Promise((resolve) => {
+            const fallbackId = Math.floor(Math.random() * 1_000_000);
+            sendMessage({ type: "GET_CURRENT_TAB" }).then((res) => {
+                resolve(res.data?.id ?? fallbackId);
+            });
+        });
     }
 }
