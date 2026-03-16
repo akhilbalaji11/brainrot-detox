@@ -29,7 +29,7 @@ function syncRange(id: string, valId: string) {
 }
 syncRange("threshold", "val-threshold");
 syncRange("grassMin", "val-grassMin");
-syncRange("vibeInt", "val-vibeInt");
+syncRange("sideQuestCooldown", "val-sideQuestCooldown");
 
 /* ── Dark mode live preview ───────────────────────────── */
 
@@ -50,13 +50,13 @@ async function loadSettings() {
     (document.getElementById("feat-cookedMeter") as HTMLInputElement).checked = s.sites.youtube.cookedMeter;
     (document.getElementById("feat-snackPacks") as HTMLInputElement).checked = s.sites.youtube.snackPacks;
     (document.getElementById("feat-touchGrass") as HTMLInputElement).checked = s.sites.youtube.touchGrass;
-    (document.getElementById("feat-vibeCheck") as HTMLInputElement).checked = s.sites.youtube.vibeCheck;
+    (document.getElementById("feat-sideQuest") as HTMLInputElement).checked = s.sites.youtube.sideQuest;
     (document.getElementById("threshold") as HTMLInputElement).value = String(s.cooked.thresholds.intervention);
     document.getElementById("val-threshold")!.textContent = String(s.cooked.thresholds.intervention);
     (document.getElementById("grassMin") as HTMLInputElement).value = String(s.touchGrass.defaultMinutes);
     document.getElementById("val-grassMin")!.textContent = String(s.touchGrass.defaultMinutes);
-    (document.getElementById("vibeInt") as HTMLInputElement).value = String(s.vibeCheck.intervalMinutes);
-    document.getElementById("val-vibeInt")!.textContent = String(s.vibeCheck.intervalMinutes);
+    (document.getElementById("sideQuestCooldown") as HTMLInputElement).value = String(s.sideQuest.promptCooldownMinutes);
+    document.getElementById("val-sideQuestCooldown")!.textContent = String(s.sideQuest.promptCooldownMinutes);
 
     // Sites
     document.querySelectorAll<HTMLInputElement>("[data-site]").forEach((el) => {
@@ -75,16 +75,16 @@ document.getElementById("btnSave")!.addEventListener("click", async () => {
     const darkMode = (document.getElementById("darkMode") as HTMLInputElement).checked;
     const threshold = parseInt((document.getElementById("threshold") as HTMLInputElement).value, 10);
     const grassMin = parseInt((document.getElementById("grassMin") as HTMLInputElement).value, 10);
-    const vibeInt = parseInt((document.getElementById("vibeInt") as HTMLInputElement).value, 10);
+    const sideQuestCooldown = parseInt((document.getElementById("sideQuestCooldown") as HTMLInputElement).value, 10);
 
     const cookedMeter = (document.getElementById("feat-cookedMeter") as HTMLInputElement).checked;
     const snackPacks = (document.getElementById("feat-snackPacks") as HTMLInputElement).checked;
     const touchGrass = (document.getElementById("feat-touchGrass") as HTMLInputElement).checked;
-    const vibeCheck = (document.getElementById("feat-vibeCheck") as HTMLInputElement).checked;
+    const sideQuest = (document.getElementById("feat-sideQuest") as HTMLInputElement).checked;
 
     const siteStates: Partial<Record<SiteKey, any>> = {};
     document.querySelectorAll<HTMLInputElement>("[data-site]").forEach((el) => {
-        siteStates[el.dataset.site as SiteKey] = { enabled: el.checked, cookedMeter, snackPacks, touchGrass, vibeCheck };
+        siteStates[el.dataset.site as SiteKey] = { enabled: el.checked, cookedMeter, snackPacks, touchGrass, sideQuest };
     });
 
     await chrome.runtime.sendMessage({
@@ -95,7 +95,7 @@ document.getElementById("btnSave")!.addEventListener("click", async () => {
             sites: siteStates,
             cooked: { thresholds: { intervention: threshold } },
             touchGrass: { defaultMinutes: grassMin },
-            vibeCheck: { intervalMinutes: vibeInt },
+            sideQuest: { promptCooldownMinutes: sideQuestCooldown },
         },
     });
 

@@ -114,7 +114,7 @@ async function handleMessage(msg: ExtMessage, sender: chrome.runtime.MessageSend
             const stats = await getStats();
             const eventType: string = msg.payload?.eventType;
             if (eventType === "intervention") stats.totalInterventions++;
-            if (eventType === "vibe_check") stats.totalVibeChecks++;
+            if (eventType === "side_quest_completed") stats.totalSideQuestsCompleted++;
             if (eventType === "bypass") stats.totalBypassCount++;
             await saveStats(stats);
             return { success: true };

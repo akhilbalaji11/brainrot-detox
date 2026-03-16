@@ -1,25 +1,25 @@
-/* ── Site keys ─────────────────────────────────────────── */
+/* Site keys */
 export type SiteKey = "youtube" | "shorts" | "reddit" | "instagram-reels" | "tiktok";
 
-/* ── Cooked Meter ─────────────────────────────────────── */
+/* Cooked meter */
 export type CookedStatus = "Based" | "Medium Cooked" | "Absolutely Cooked";
 
 export interface CookedThresholds {
-    basedMax: number;      // 0-100
-    mediumMax: number;     // 0-100
-    intervention: number;  // score that triggers intervention
-    cooldownMs: number;    // ms before another intervention
+    basedMax: number;
+    mediumMax: number;
+    intervention: number;
+    cooldownMs: number;
 }
 
-/* ── Snack Packs ──────────────────────────────────────── */
+/* Snack packs */
 export type PackMode = "items" | "time";
 
 export interface PackState {
     active: boolean;
     mode: PackMode;
-    limit: number;           // items count or minutes
-    consumed: number;        // items consumed so far
-    startedAt: number;       // Date.now()
+    limit: number;
+    consumed: number;
+    startedAt: number;
 }
 
 export interface PackPreset {
@@ -29,26 +29,32 @@ export interface PackPreset {
     value: number;
 }
 
-/* ── Touch Grass ──────────────────────────────────────── */
+/* Touch grass */
 export interface TouchGrassState {
     active: boolean;
     endsAt: number;
     bypassCount: number;
 }
 
-/* ── Vibe Check ───────────────────────────────────────── */
-export type VibeIntent = "Chill" | "Learn" | "Laugh" | "Music" | "JustHere";
-
-/* ── Widget Position ──────────────────────────────────── */
-export interface WidgetPosition {
-    edge: "left" | "right";
-    verticalOffset: number; // pixels from bottom
+/* Side quests */
+export interface SideQuestDefinition {
+    id: string;
+    icon: string;
+    title: string;
+    instruction: string;
+    durationSec: number;
 }
 
-/* ── Theme ────────────────────────────────────────────── */
+/* Widget position */
+export interface WidgetPosition {
+    edge: "left" | "right";
+    verticalOffset: number;
+}
+
+/* Theme */
 export type Theme = "light" | "dark";
 
-/* ── Session state (per-tab, lives in service worker) ── */
+/* Session state (per-tab, lives in service worker) */
 export interface SessionState {
     site: SiteKey;
     tabId: number;
@@ -58,18 +64,17 @@ export interface SessionState {
     lastInterventionAt: number;
     packState: PackState;
     touchGrass: TouchGrassState;
-    vibeIntent: VibeIntent;
     itemsConsumed: number;
     scrollEvents: number;
 }
 
-/* ── Settings ─────────────────────────────────────────── */
+/* Settings */
 export interface SiteSettings {
     enabled: boolean;
     cookedMeter: boolean;
     snackPacks: boolean;
     touchGrass: boolean;
-    vibeCheck: boolean;
+    sideQuest: boolean;
 }
 
 export interface SettingsState {
@@ -88,26 +93,25 @@ export interface SettingsState {
         defaultMinutes: number;
         emergencyBypass: boolean;
     };
-    vibeCheck: {
-        intervalMinutes: number;
-        snoozeUntilMs: number;
-        activeIntent: VibeIntent;
+    sideQuest: {
+        promptCooldownMinutes: number;
+        nextPromptAfterMs: number;
     };
-    theme: "light" | "dark";
+    theme: Theme;
 }
 
-/* ── Stats (persisted) ────────────────────────────────── */
+/* Stats */
 export interface StatsState {
     totalPacksCompleted: number;
     totalTouchGrassSessions: number;
     totalInterventions: number;
-    totalVibeChecks: number;
+    totalSideQuestsCompleted: number;
     totalBypassCount: number;
     sites: Record<SiteKey, { packsCompleted: number; interventions: number; timeSpentMin: number }>;
-    weeklyScores: number[]; // last 7 days average cooked scores
+    weeklyScores: number[];
 }
 
-/* ── Messaging ────────────────────────────────────────── */
+/* Messaging */
 export type MessageType =
     | "GET_SESSION"
     | "UPDATE_SESSION"
@@ -119,6 +123,9 @@ export type MessageType =
     | "END_PACK"
     | "START_TOUCH_GRASS"
     | "END_TOUCH_GRASS"
+    | "TRIGGER_PACK"
+    | "TRIGGER_TOUCH_GRASS"
+    | "TRIGGER_SIDE_QUEST"
     | "LOG_EVENT"
     | "GET_CURRENT_TAB";
 

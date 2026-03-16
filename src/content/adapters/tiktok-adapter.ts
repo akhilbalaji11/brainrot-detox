@@ -1,15 +1,9 @@
-import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
+import { TOUCH_GRASS_TIPS } from "@/core/constants";
 import {
     TIKTOK_WATCH_SCORE_PER_SECOND,
     computeTikTokCookedScore,
-    deriveCookedStatus,
     getCookedLabel,
-    isMaxCooked,
-    shouldIntervene,
 } from "@/core/cooked-meter";
-import { sendMessage } from "@/core/messaging";
-import { incrementPack, isPackComplete } from "@/core/snack-packs";
-import type { VibeIntent } from "@/core/types";
 import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
@@ -44,8 +38,8 @@ export class TikTokAdapter extends BaseAdapter {
             return false;
         }
 
-        if (msg.type === "TRIGGER_VIBE_CHECK") {
-            this.showVibeCheckOverlay();
+        if (msg.type === "TRIGGER_SIDE_QUEST") {
+            void this.openSideQuest("manual");
             sendResponse({ success: true });
             return false;
         }
@@ -83,6 +77,22 @@ export class TikTokAdapter extends BaseAdapter {
         if (video && video.paused) {
             video.play().catch(() => undefined);
         }
+    }
+
+    protected onSideQuestOpened(): void {
+        this.freezeFeed();
+    }
+
+    protected onSideQuestClosed(): void {
+        this.thawFeed();
+    }
+
+    protected onLockedMaxCookedOverlayOpened(): void {
+        this.freezeFeed();
+    }
+
+    protected onLockedMaxCookedOverlayClosed(): void {
+        this.thawFeed();
     }
 
     protected setupObservers(): void {
@@ -134,7 +144,7 @@ export class TikTokAdapter extends BaseAdapter {
         this.registerInterval(detectActiveVideo, 250);
         this.registerInterval(() => {
             const video = this.getActiveTikTokVideo();
-            if (video && !video.paused && this.isVideoMostlyInViewport(video)) {
+            if (video && !video.paused && this.isVideoMostlyInViewport(video) && !this.hasBlockingOverlayOpen()) {
                 this.watchTimeSinceLastTick += 100;
             }
         }, 100);
@@ -167,6 +177,7 @@ export class TikTokAdapter extends BaseAdapter {
 
         const now = Date.now();
         const previousScore = this.session.cookedScore;
+        const previousStatus = this.session.cookedStatus;
         const newItems = this.getNewItemsSinceLastTick();
         const watchTimeMs = this.watchTimeSinceLastTick;
         this.watchTimeSinceLastTick = 0;
@@ -189,40 +200,9 @@ export class TikTokAdapter extends BaseAdapter {
         if (!this.session.packState.active) {
             const baseGain = newItems + (watchTimeMs / 1000) * TIKTOK_WATCH_SCORE_PER_SECOND;
             const signalGain = baseGain * this.getVelocityMultiplier(now);
-            newScore = computeTikTokCookedScore(previousScore, signalGain, this.session.vibeIntent, idleMs);
+            newScore = computeTikTokCookedScore(previousScore, signalGain, idleMs);
         }
-
-        this.scrollCount = 0;
-        this.swipeCount = 0;
-
-        this.session.cookedScore = newScore;
-        this.session.cookedStatus = deriveCookedStatus(newScore, this.settings.cooked.thresholds);
-
-        if (this.session.packState.active) {
-            this.session.packState = incrementPack(this.session.packState, newItems);
-            if (isPackComplete(this.session.packState, now)) {
-                this.onPackComplete();
-            }
-        }
-
-        if (!this.session.packState.active) {
-            if (isMaxCooked(newScore)) {
-                if (!this.maxCookedShown) {
-                    this.maxCookedShown = true;
-                    this.onMaxCooked();
-                }
-            } else {
-                if (newScore < 95) this.maxCookedShown = false;
-                const scoreRising = newScore >= previousScore;
-                if (scoreRising && shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)) {
-                    this.session.lastInterventionAt = now;
-                    this.onIntervention();
-                }
-            }
-        }
-
-        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
-        await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: this.session } });
+        await this.completeTick(previousScore, previousStatus, newScore, newItems, now);
     }
 
     protected mountCookedWidget(): void {
@@ -243,7 +223,7 @@ export class TikTokAdapter extends BaseAdapter {
                     <div class="brd-btn-row">
                         <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
                         <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
-                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                        <button class="brd-btn brd-btn-success" data-action="sidequest">Side Quest</button>
                     </div>
                 </div>
             </div>
@@ -254,9 +234,9 @@ export class TikTokAdapter extends BaseAdapter {
             removeOverlay("intervention");
             this.startPack("items", 10);
         });
-        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+        wrapper.querySelector("[data-action='sidequest']")?.addEventListener("click", () => {
             removeOverlay("intervention");
-            this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+            void this.openSideQuest("manual");
         });
     }
 
@@ -271,7 +251,7 @@ export class TikTokAdapter extends BaseAdapter {
                     <div class="brd-btn-row" style="justify-content:center;">
                         <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
                         <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
-                        <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="sidequest">Side Quest</button>
                     </div>
                 </div>
             </div>
@@ -287,10 +267,9 @@ export class TikTokAdapter extends BaseAdapter {
             this.thawFeed();
             this.startPack("items", 10);
         });
-        wrapper.querySelector("[data-action='vibe']")?.addEventListener("click", () => {
+        wrapper.querySelector("[data-action='sidequest']")?.addEventListener("click", () => {
             removeOverlay("denied");
-            this.thawFeed();
-            this.showVibeCheckOverlay();
+            void this.openSideQuest("manual", { returnToForcedChoice: true });
         });
     }
 
@@ -330,7 +309,7 @@ export class TikTokAdapter extends BaseAdapter {
         wrapper.querySelector("[data-action='dismiss']")?.addEventListener("click", () => {
             removeOverlay("skyrim");
             this.thawFeed();
-            this.builtDifferentDismissed = true;
+            this.armBuiltDifferentFollowUp();
         });
     }
 
@@ -443,36 +422,6 @@ export class TikTokAdapter extends BaseAdapter {
             this.thawFeed();
             removeOverlay("touchgrass");
         });
-    }
-
-    protected showVibeCheckOverlay(): void {
-        const vibes = VIBE_OPTIONS.map((vibe) => `
-            <div class="brd-vibe-card" data-vibe="${vibe.id}">
-                <span class="brd-vibe-emoji">${vibe.emoji}</span>
-                <span class="brd-vibe-label">${vibe.label}</span>
-            </div>
-        `).join("");
-
-        const wrapper = showOverlay("vibecheck", `
-            <div class="brd-fullscreen">
-                <div class="brd-card">
-                    <h2>Vibe Check</h2>
-                    <p>What are you here for?</p>
-                    <div class="brd-vibe-grid">${vibes}</div>
-                    <div class="brd-btn-row" style="justify-content:center;">
-                        <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
-                    </div>
-                </div>
-            </div>
-        `);
-
-        wrapper.querySelectorAll("[data-vibe]").forEach((element) => {
-            element.addEventListener("click", () => {
-                this.setVibeIntent((element as HTMLElement).dataset.vibe as VibeIntent);
-                removeOverlay("vibecheck");
-            });
-        });
-        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
     }
 
     protected removeAllOverlays(): void {

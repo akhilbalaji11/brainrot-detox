@@ -1,6 +1,5 @@
-import { TOUCH_GRASS_TIPS, VIBE_OPTIONS } from "@/core/constants";
+import { TOUCH_GRASS_TIPS } from "@/core/constants";
 import { getCookedLabel } from "@/core/cooked-meter";
-import type { VibeIntent } from "@/core/types";
 import { removeAllOverlays as removeAll, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 import { BaseAdapter } from "./base-adapter";
 
@@ -31,8 +30,8 @@ export class YouTubeAdapter extends BaseAdapter {
             return false;
         }
 
-        if (msg.type === "TRIGGER_VIBE_CHECK") {
-            this.showVibeCheckOverlay();
+        if (msg.type === "TRIGGER_SIDE_QUEST") {
+            void this.openSideQuest("manual");
             sendResponse({ success: true });
             return false;
         }
@@ -95,7 +94,7 @@ export class YouTubeAdapter extends BaseAdapter {
                     <div class="brd-btn-row">
                         <button class="brd-btn brd-btn-ghost" data-action="dismiss">Keep Going</button>
                         <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
-                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                        <button class="brd-btn brd-btn-success" data-action="sidequest">Side Quest</button>
                     </div>
                 </div>
             </div>
@@ -106,9 +105,9 @@ export class YouTubeAdapter extends BaseAdapter {
             removeOverlay("intervention");
             this.startPack("items", 10);
         });
-        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+        wrapper.querySelector("[data-action='sidequest']")?.addEventListener("click", () => {
             removeOverlay("intervention");
-            this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+            void this.openSideQuest("manual");
         });
     }
 
@@ -141,7 +140,7 @@ export class YouTubeAdapter extends BaseAdapter {
         });
         wrapper.querySelector("[data-action='dismiss']")?.addEventListener("click", () => {
             removeOverlay("skyrim");
-            this.builtDifferentDismissed = true;
+            this.armBuiltDifferentFollowUp();
         });
     }
 
@@ -192,36 +191,6 @@ export class YouTubeAdapter extends BaseAdapter {
         wrapper.querySelector("video")?.play().catch(() => undefined);
     }
 
-    protected showVibeCheckOverlay(): void {
-        const vibes = VIBE_OPTIONS.map((vibe) => `
-            <div class="brd-vibe-card" data-vibe="${vibe.id}">
-                <span class="brd-vibe-emoji">${vibe.emoji}</span>
-                <span class="brd-vibe-label">${vibe.label}</span>
-            </div>
-        `).join("");
-
-        const wrapper = showOverlay("vibecheck", `
-            <div class="brd-fullscreen">
-                <div class="brd-card">
-                    <h2>Vibe Check</h2>
-                    <p>What are you here for?</p>
-                    <div class="brd-vibe-grid">${vibes}</div>
-                    <div class="brd-btn-row" style="justify-content:center;">
-                        <button class="brd-btn brd-btn-ghost" data-action="skip">Skip</button>
-                    </div>
-                </div>
-            </div>
-        `);
-
-        wrapper.querySelectorAll("[data-vibe]").forEach((element) => {
-            element.addEventListener("click", () => {
-                this.setVibeIntent((element as HTMLElement).dataset.vibe as VibeIntent);
-                removeOverlay("vibecheck");
-            });
-        });
-        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => removeOverlay("vibecheck"));
-    }
-
     protected showBuiltDifferentDeniedOverlay(): void {
         const wrapper = showOverlay("denied", `
             <div class="brd-fullscreen">
@@ -231,7 +200,7 @@ export class YouTubeAdapter extends BaseAdapter {
                     <div class="brd-btn-row" style="justify-content:center;">
                         <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
                         <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
-                        <button class="brd-btn brd-btn-ghost" data-action="vibe">Vibe Check</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="sidequest">Side Quest</button>
                     </div>
                 </div>
             </div>
@@ -245,9 +214,9 @@ export class YouTubeAdapter extends BaseAdapter {
             removeOverlay("denied");
             this.startPack("items", 10);
         });
-        wrapper.querySelector("[data-action='vibe']")?.addEventListener("click", () => {
+        wrapper.querySelector("[data-action='sidequest']")?.addEventListener("click", () => {
             removeOverlay("denied");
-            this.showVibeCheckOverlay();
+            void this.openSideQuest("manual", { returnToForcedChoice: true });
         });
     }
 

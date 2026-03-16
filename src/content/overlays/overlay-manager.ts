@@ -394,6 +394,13 @@ const OVERLAY_CSS = `
     box-shadow: none;
   }
 
+  .brd-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
+    box-shadow: 2px 2px 0 rgba(58, 46, 30, 0.45);
+  }
+
   .brd-btn-primary {
     background: #e8d5f5;
     border-color: #7b2d8b;
@@ -530,45 +537,60 @@ const OVERLAY_CSS = `
     margin: 12px 0;
   }
 
-  .brd-vibe-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0;
+  .brd-sidequest-card {
+    text-align: center;
   }
 
-  .brd-vibe-card {
-    display: flex;
-    flex-direction: column;
+  .brd-sidequest-badge {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 12px 8px;
-    background: #fdf8ee;
-    border: 2px solid #3a2e1e;
-    border-radius: 5px;
-    cursor: pointer;
-    box-shadow: 2px 2px 0 #3a2e1e;
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    justify-content: center;
+    padding: 4px 10px;
+    margin-bottom: 10px;
+    border: 2px dashed #3a2e1e;
+    border-radius: 999px;
+    background: #fff7d1;
+    color: #7a5c11;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
-  .brd-vibe-card:hover {
-    background: #e8d5f5;
-    border-color: #7b2d8b;
-    box-shadow: 3px 3px 0 #7b2d8b;
-    transform: translate(-1px, -1px);
-  }
-
-  .brd-vibe-emoji {
+  .brd-sidequest-icon {
     font-family: 'Caveat', cursive;
-    font-size: 18px;
-    color: #3a2e1e;
+    font-size: 28px;
+    font-weight: 700;
+    color: #2d6a4f;
+    margin-bottom: 4px;
   }
 
-  .brd-vibe-label {
-    font-family: 'Patrick Hand', cursive;
-    font-size: 11px;
-    font-weight: 600;
+  .brd-sidequest-instruction {
+    font-size: 17px;
+    color: #3a2e1e;
+    margin-bottom: 12px;
+  }
+
+  .brd-sidequest-meta {
+    font-size: 13px;
     color: #7a6a50;
+  }
+
+  .brd-sidequest-countdown {
+    margin: 10px auto 12px;
+    width: 94px;
+    height: 94px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #2d6a4f;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #f6fff2, #d5f0e0);
+    box-shadow: 4px 4px 0 #2d6a4f;
+    font-family: 'Caveat', cursive;
+    font-size: 44px;
+    font-weight: 700;
+    color: #2d6a4f;
   }
 
   .brd-tips {
@@ -791,21 +813,26 @@ const OVERLAY_CSS = `
     border-color: #505050;
   }
 
-  :host(.brd-dark) .brd-vibe-card {
-    background: #2d2d2d;
+  :host(.brd-dark) .brd-sidequest-badge {
+    background: #43320f;
     border-color: #e8e0d0;
-    box-shadow: 2px 2px 0 #000;
+    color: #facc15;
   }
 
-  :host(.brd-dark) .brd-vibe-card:hover {
-    background: #3d2850;
-    border-color: #a855f7;
-    box-shadow: 3px 3px 0 #a855f7;
+  :host(.brd-dark) .brd-sidequest-icon,
+  :host(.brd-dark) .brd-sidequest-instruction {
+    color: #d5f0e0;
   }
 
-  :host(.brd-dark) .brd-vibe-emoji,
-  :host(.brd-dark) .brd-vibe-label {
-    color: #a09080;
+  :host(.brd-dark) .brd-sidequest-meta {
+    color: #b8aa96;
+  }
+
+  :host(.brd-dark) .brd-sidequest-countdown {
+    background: radial-gradient(circle at 30% 30%, #193126, #10221a);
+    border-color: #4ade80;
+    box-shadow: 4px 4px 0 #4ade80;
+    color: #4ade80;
   }
 
   :host(.brd-dark) .brd-tip {

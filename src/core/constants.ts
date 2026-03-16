@@ -1,6 +1,15 @@
-import type { CookedThresholds, PackPreset, PackState, SettingsState, SiteSettings, StatsState, TouchGrassState, WidgetPosition } from "./types";
+import type {
+    CookedThresholds,
+    PackPreset,
+    PackState,
+    SettingsState,
+    SideQuestDefinition,
+    SiteSettings,
+    StatsState,
+    TouchGrassState,
+    WidgetPosition,
+} from "./types";
 
-/* ── Cooked thresholds ────────────────────────────────── */
 export const DEFAULT_THRESHOLDS: CookedThresholds = {
     basedMax: 35,
     mediumMax: 65,
@@ -8,7 +17,6 @@ export const DEFAULT_THRESHOLDS: CookedThresholds = {
     cooldownMs: 60_000,
 };
 
-/* ── Pack presets ─────────────────────────────────────── */
 export const PACK_PRESETS: PackPreset[] = [
     { id: "5items", label: "5 Items", mode: "items", value: 5 },
     { id: "10items", label: "10 Items", mode: "items", value: 10 },
@@ -18,7 +26,6 @@ export const PACK_PRESETS: PackPreset[] = [
     { id: "20min", label: "20 Minutes", mode: "time", value: 20 },
 ];
 
-/* ── Default states ───────────────────────────────────── */
 export const DEFAULT_PACK_STATE: PackState = {
     active: false,
     mode: "items",
@@ -33,16 +40,14 @@ export const DEFAULT_TOUCH_GRASS: TouchGrassState = {
     bypassCount: 0,
 };
 
-/* ── Default site settings ────────────────────────────── */
 const SITE_DEFAULTS: SiteSettings = {
     enabled: true,
     cookedMeter: true,
     snackPacks: true,
     touchGrass: true,
-    vibeCheck: true,
+    sideQuest: true,
 };
 
-/* ── Default settings ─────────────────────────────────── */
 export const DEFAULT_SETTINGS: SettingsState = {
     masterEnabled: true,
     sites: {
@@ -50,7 +55,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
         shorts: { ...SITE_DEFAULTS },
         reddit: { ...SITE_DEFAULTS },
         "instagram-reels": { ...SITE_DEFAULTS },
-        "tiktok": { ...SITE_DEFAULTS },
+        tiktok: { ...SITE_DEFAULTS },
     },
     cooked: {
         thresholds: DEFAULT_THRESHOLDS,
@@ -65,74 +70,106 @@ export const DEFAULT_SETTINGS: SettingsState = {
         defaultMinutes: 5,
         emergencyBypass: true,
     },
-    vibeCheck: {
-        intervalMinutes: 15,
-        snoozeUntilMs: 0,
-        activeIntent: "JustHere",
+    sideQuest: {
+        promptCooldownMinutes: 15,
+        nextPromptAfterMs: 0,
     },
     theme: "light",
 };
 
-/* ── Default per-site stats ──────────────────────────── */
 const SITE_STATS_DEFAULTS = { packsCompleted: 0, interventions: 0, timeSpentMin: 0 };
 
 export const DEFAULT_STATS: StatsState = {
     totalPacksCompleted: 0,
     totalTouchGrassSessions: 0,
     totalInterventions: 0,
-    totalVibeChecks: 0,
+    totalSideQuestsCompleted: 0,
     totalBypassCount: 0,
     sites: {
         youtube: { ...SITE_STATS_DEFAULTS },
         shorts: { ...SITE_STATS_DEFAULTS },
         reddit: { ...SITE_STATS_DEFAULTS },
         "instagram-reels": { ...SITE_STATS_DEFAULTS },
-        "tiktok": { ...SITE_STATS_DEFAULTS },
+        tiktok: { ...SITE_STATS_DEFAULTS },
     },
     weeklyScores: [],
 };
 
-/* ── Touch-grass tips ─────────────────────────────────── */
 export const TOUCH_GRASS_TIPS = [
     "[>] Step outside for 2 minutes",
     "[~] Drink a glass of water",
     "[o] Do 5 deep breaths",
     "[!] Do 10 jumping jacks",
     "[*] Look at something 20 feet away for 20 seconds",
-    "[♪] Put on your favorite song",
+    "[~] Put on your favorite song",
     "[>] Text a friend something nice",
     "[=] Open a window and feel the air",
 ];
 
-/* ── Cooked status labels ─────────────────────────────── */
 export const COOKED_LABELS = {
     based: { emoji: "( ._.)", label: "Based", hint: "Keep it chill, you're doing great." },
     medium: { emoji: "(-_-;)", label: "Medium Cooked", hint: "Maybe take a breather soon?" },
     cooked: { emoji: "(x_x) ", label: "Absolutely Cooked", hint: "Bro. Step away from the screen." },
 } as const;
 
-/* ── Vibe options ─────────────────────────────────────── */
-export const VIBE_OPTIONS = [
-    { id: "Chill", emoji: "~_~", label: "Just Vibing" },
-    { id: "Learn", emoji: "o_O", label: "Learn Something" },
-    { id: "Laugh", emoji: "xD", label: "Get Entertained" },
-    { id: "Music", emoji: "♪♫", label: "Music / Audio" },
-    { id: "JustHere", emoji: "...", label: "I'm Just Here" },
-] as const;
+export const SIDE_QUEST_SCORE_RELIEF = 12;
 
-/* ── Misc ─────────────────────────────────────────────── */
+export const SIDE_QUESTS: SideQuestDefinition[] = [
+    {
+        id: "hydrate",
+        icon: "[~]",
+        title: "Hydration Hero",
+        instruction: "Take a real sip of water. Yes, right now.",
+        durationSec: 8,
+    },
+    {
+        id: "stretch",
+        icon: "[>]",
+        title: "Stretch Goblin",
+        instruction: "Stand up and stretch your arms overhead like you mean it.",
+        durationSec: 10,
+    },
+    {
+        id: "far-focus",
+        icon: "[*]",
+        title: "Far Away Focus",
+        instruction: "Look at something far away until your eyeballs stop buzzing.",
+        durationSec: 8,
+    },
+    {
+        id: "jaw-reset",
+        icon: "[=]",
+        title: "Jaw Reset",
+        instruction: "Unclench your jaw and roll your shoulders twice.",
+        durationSec: 6,
+    },
+    {
+        id: "breaths",
+        icon: "[o]",
+        title: "Five Deep Breaths",
+        instruction: "Take 5 slow breaths. In. Out. Main character reset.",
+        durationSec: 10,
+    },
+    {
+        id: "window-patrol",
+        icon: "[!]",
+        title: "Window Patrol",
+        instruction: "Look out a window or focus on something real-world for a moment.",
+        durationSec: 8,
+    },
+];
+
 export const SKYRIM_VIDEO_FILENAME = "skyrim-skeleton.mp4";
-export const EMA_ALPHA = 0.3;          // exponential smoothing factor
-export const TICK_INTERVAL_MS = 3000;  // cooked meter tick interval
+export const EMA_ALPHA = 0.3;
+export const TICK_INTERVAL_MS = 3000;
 export const IDLE_DECAY_THRESHOLD_MS = 15_000;
 
-/* ── Adaptive timer constants ─────────────────────────── */
 export const TICK_FAST_MS = 500;
 export const TICK_IDLE_MS = 3000;
 export const ACTIVITY_THRESHOLD_MS = 2000;
 export const VELOCITY_WINDOW_MS = 4000;
 export const VELOCITY_MULTIPLIER_COEFFICIENT = 0.35;
 export const VELOCITY_MULTIPLIER_MAX = 3;
+export const SHORT_FORM_DECAY_THRESHOLD_MS = 20_000;
 
-/* ── Default widget position ─────────────────────────── */
 export const DEFAULT_WIDGET_POSITION: WidgetPosition = { edge: "right", verticalOffset: 20 };

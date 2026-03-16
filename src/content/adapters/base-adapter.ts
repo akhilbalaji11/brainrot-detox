@@ -2,6 +2,8 @@ import {
     ACTIVITY_THRESHOLD_MS,
     DEFAULT_PACK_STATE,
     DEFAULT_TOUCH_GRASS,
+    SIDE_QUEST_SCORE_RELIEF,
+    SIDE_QUESTS,
     TICK_FAST_MS,
     TICK_IDLE_MS,
     VELOCITY_MULTIPLIER_COEFFICIENT,
@@ -18,8 +20,8 @@ import {
 } from "@/core/cooked-meter";
 import { sendMessage } from "@/core/messaging";
 import { getPackProgress, incrementPack, isPackComplete } from "@/core/snack-packs";
-import type { SessionState, SettingsState, SiteKey, VibeIntent } from "@/core/types";
-import { initWidgetPosition, mountOrUpdateWidget } from "../overlays/overlay-manager";
+import type { CookedStatus, SessionState, SettingsState, SideQuestDefinition, SiteKey } from "@/core/types";
+import { getOverlayRoot, initWidgetPosition, mountOrUpdateWidget, removeOverlay, showOverlay } from "../overlays/overlay-manager";
 
 type RuntimeMessageListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
 
@@ -57,6 +59,9 @@ export abstract class BaseAdapter {
     private tickTimer: number | null = null;
     private cleanupFns: Array<() => void> = [];
     private velocitySamples: VelocitySample[] = [];
+    private sideQuestSeed = Math.floor(Math.random() * SIDE_QUESTS.length);
+    private maxCookedChoiceLocked = false;
+    private reopenForcedChoiceAfterSideQuest = false;
 
     async init() {
         if (this.enabled) {
@@ -86,7 +91,6 @@ export abstract class BaseAdapter {
                     lastInterventionAt: 0,
                     packState: { ...DEFAULT_PACK_STATE },
                     touchGrass: { ...DEFAULT_TOUCH_GRASS },
-                    vibeIntent: this.settings.vibeCheck.activeIntent,
                     itemsConsumed: 0,
                     scrollEvents: 0,
                 };
@@ -105,7 +109,7 @@ export abstract class BaseAdapter {
             this.setupObservers();
             this.scheduleNextTick();
 
-            if (this.session.touchGrass.active && this.session.touchGrass.endsAt > Date.now()) {
+            if (this.isTouchGrassActive()) {
                 this.showTouchGrassOverlay();
             }
 
@@ -281,7 +285,9 @@ export abstract class BaseAdapter {
             score,
             status,
             pack: this.buildPackDisplay(),
-            onActivate: () => this.showVibeCheckOverlay(),
+            onActivate: () => {
+                void this.openSideQuest("manual");
+            },
         });
     }
 
@@ -299,11 +305,47 @@ export abstract class BaseAdapter {
         this.lastSignalAt = 0;
     }
 
+    protected isSideQuestOpen(): boolean {
+        return Boolean(getOverlayRoot().querySelector(`[data-overlay="sidequest"]`));
+    }
+
+    protected hasBlockingOverlayOpen(excluding: string[] = []): boolean {
+        const exclusions = new Set(["widget", ...excluding]);
+        return Array.from(getOverlayRoot().querySelectorAll<HTMLElement>("[data-overlay]"))
+            .some((element) => !exclusions.has(element.dataset.overlay ?? ""));
+    }
+
+    protected canOpenSideQuest(source: "manual" | "auto", now: number = Date.now()): boolean {
+        if (!this.settings?.sites[this.site]?.sideQuest) return false;
+        if (this.isTouchGrassActive()) return false;
+        if (this.isSideQuestOpen()) return false;
+        if (this.hasBlockingOverlayOpen()) return false;
+        if (source === "auto" && this.session.packState.active) return false;
+        if (source === "auto" && now < this.settings.sideQuest.nextPromptAfterMs) return false;
+        return true;
+    }
+
+    protected async openSideQuest(
+        source: "manual" | "auto" = "manual",
+        options?: { returnToForcedChoice?: boolean }
+    ): Promise<boolean> {
+        if (!this.enabled || !this.canOpenSideQuest(source)) {
+            return false;
+        }
+
+        this.reopenForcedChoiceAfterSideQuest = options?.returnToForcedChoice ?? false;
+        const quest = this.pickSideQuest();
+        this.onSideQuestOpened();
+        this.renderSideQuestPrompt(quest, source);
+        return true;
+    }
+
     protected async tick() {
         if (!this.enabled) return;
 
         const now = Date.now();
         const previousScore = this.session.cookedScore;
+        const previousStatus = this.session.cookedStatus;
         const newItems = this.getNewItemsSinceLastTick();
 
         this.session.itemsConsumed += newItems;
@@ -326,7 +368,7 @@ export abstract class BaseAdapter {
             newScore = previousScore;
         } else if (this.site === "shorts") {
             const navigationGain = newItems * this.getVelocityMultiplier(now);
-            newScore = computeShortsCookedScore(previousScore, navigationGain, this.session.vibeIntent, idleMs);
+            newScore = computeShortsCookedScore(previousScore, navigationGain, idleMs);
         } else {
             const velocityUnits = this.getGeneralVelocityUnits(newItems);
             if (velocityUnits > 0) {
@@ -341,15 +383,26 @@ export abstract class BaseAdapter {
                 this.session.itemsConsumed
             );
             const velocityMultiplier = this.getVelocityMultiplier(now);
-            const rolling = computeRollingScore(previousScore, instant, hasNewSignals, idleMs, this.session.vibeIntent);
+            const rolling = computeRollingScore(previousScore, instant, hasNewSignals, idleMs);
             newScore = Math.min(100, rolling + this.computeGeneralBurstBonus(velocityUnits, velocityMultiplier));
         }
 
+        await this.completeTick(previousScore, previousStatus, newScore, newItems, now);
+    }
+
+    protected async completeTick(
+        previousScore: number,
+        previousStatus: CookedStatus,
+        newScore: number,
+        newItems: number,
+        now: number
+    ) {
         this.scrollCount = 0;
         this.swipeCount = 0;
 
         this.session.cookedScore = newScore;
-        this.session.cookedStatus = deriveCookedStatus(newScore, this.settings.cooked.thresholds);
+        const newStatus = deriveCookedStatus(newScore, this.settings.cooked.thresholds);
+        this.session.cookedStatus = newStatus;
 
         if (this.session.packState.active) {
             this.session.packState = incrementPack(this.session.packState, newItems);
@@ -358,18 +411,41 @@ export abstract class BaseAdapter {
             }
         }
 
-        if (!this.session.packState.active) {
-            if (isMaxCooked(newScore)) {
-                if (!this.maxCookedShown) {
-                    this.maxCookedShown = true;
-                    this.onMaxCooked();
+        if (!isMaxCooked(newScore)) {
+            this.clearForcedMaxCookedChoice();
+        }
+
+        if (!this.session.packState.active && !this.isSideQuestOpen()) {
+            const scoreRising = newScore > previousScore;
+            if (scoreRising) {
+                await this.maybeAutoPrompt(previousStatus, newStatus, now);
+            }
+
+            if (!this.isSideQuestOpen()) {
+                if (
+                    this.maxCookedChoiceLocked &&
+                    isMaxCooked(newScore) &&
+                    !this.builtDifferentDismissed &&
+                    !this.hasBlockingOverlayOpen()
+                ) {
+                    this.showLockedMaxCookedOverlay();
                 }
-            } else {
-                if (newScore < 95) this.maxCookedShown = false;
-                const scoreRising = newScore >= previousScore;
-                if (scoreRising && shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)) {
-                    this.session.lastInterventionAt = now;
-                    this.onIntervention();
+
+                if (isMaxCooked(newScore)) {
+                    if (!this.maxCookedShown) {
+                        this.maxCookedShown = true;
+                        this.onMaxCooked();
+                    }
+                } else {
+                    if (newScore < 95) this.maxCookedShown = false;
+                    if (
+                        scoreRising &&
+                        !this.hasBlockingOverlayOpen() &&
+                        shouldIntervene(newScore, this.session.lastInterventionAt, this.settings.cooked.thresholds, now)
+                    ) {
+                        this.session.lastInterventionAt = now;
+                        this.onIntervention();
+                    }
                 }
             }
         }
@@ -389,6 +465,7 @@ export abstract class BaseAdapter {
 
     protected onMaxCooked() {
         this.session.lastInterventionAt = Date.now();
+        removeOverlay("intervention");
         sendMessage({ type: "LOG_EVENT", payload: { eventType: "intervention" } });
         this.showSkyrimOverlay("Your brain is absolutely cooked (x_x)");
     }
@@ -402,13 +479,29 @@ export abstract class BaseAdapter {
     }
 
     protected onBuiltDifferentDenied() {
+        removeOverlay("intervention");
         this.showBuiltDifferentDeniedOverlay();
+    }
+
+    protected onSideQuestOpened() {
+        // Hook for short-form adapters that want to pause playback.
+    }
+
+    protected onSideQuestClosed() {
+        // Hook for short-form adapters that want to resume playback.
+    }
+
+    protected onLockedMaxCookedOverlayOpened() {
+        // Hook for short-form adapters that want to pause playback.
+    }
+
+    protected onLockedMaxCookedOverlayClosed() {
+        // Hook for short-form adapters that want to resume playback.
     }
 
     protected abstract showInterventionOverlay(): void;
     protected abstract showTouchGrassOverlay(): void;
     protected abstract showSkyrimOverlay(message: string): void;
-    protected abstract showVibeCheckOverlay(): void;
     protected abstract showBuiltDifferentDeniedOverlay(): void;
     protected abstract updateCookedWidget(score: number, status: string): void;
     protected abstract removeAllOverlays(): void;
@@ -419,7 +512,7 @@ export abstract class BaseAdapter {
         this.session.cookedScore = 0;
         this.session.cookedStatus = "Based";
         this.maxCookedShown = false;
-        this.builtDifferentDismissed = false;
+        this.clearForcedMaxCookedChoice();
         this.resetMomentum();
         this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
     }
@@ -427,6 +520,7 @@ export abstract class BaseAdapter {
     async startTouchGrass(minutes: number) {
         await sendMessage({ type: "START_TOUCH_GRASS", payload: { tabId: this.session.tabId, minutes } });
         this.session.touchGrass = { active: true, endsAt: Date.now() + minutes * 60_000, bypassCount: 0 };
+        this.clearForcedMaxCookedChoice();
         this.showTouchGrassOverlay();
     }
 
@@ -436,6 +530,7 @@ export abstract class BaseAdapter {
         this.session.cookedScore = 0;
         this.session.cookedStatus = "Based";
         this.maxCookedShown = false;
+        this.clearForcedMaxCookedChoice();
         this.resetMomentum();
         this.removeAllOverlays();
         this.mountCookedWidget();
@@ -447,10 +542,192 @@ export abstract class BaseAdapter {
         await this.endTouchGrass();
     }
 
-    setVibeIntent(intent: VibeIntent) {
-        this.session.vibeIntent = intent;
-        sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: { vibeIntent: intent } } });
-        sendMessage({ type: "LOG_EVENT", payload: { eventType: "vibe_check" } });
+    protected armBuiltDifferentFollowUp() {
+        this.builtDifferentDismissed = true;
+        this.maxCookedChoiceLocked = true;
+    }
+
+    private isTouchGrassActive(now: number = Date.now()): boolean {
+        return this.session.touchGrass.active && this.session.touchGrass.endsAt > now;
+    }
+
+    private pickSideQuest(excludeId?: string): SideQuestDefinition {
+        const candidates = SIDE_QUESTS.filter((quest) => quest.id !== excludeId);
+        this.sideQuestSeed = (this.sideQuestSeed + 1) % Math.max(1, candidates.length);
+        return candidates[this.sideQuestSeed] ?? SIDE_QUESTS[0];
+    }
+
+    private renderSideQuestPrompt(quest: SideQuestDefinition, source: "manual" | "auto") {
+        const wrapper = showOverlay("sidequest", `
+            <div class="brd-fullscreen">
+                <div class="brd-card brd-sidequest-card">
+                    <div class="brd-sidequest-badge">${source === "auto" ? "Mini reset unlocked" : "Manual Side Quest"}</div>
+                    <div class="brd-sidequest-icon">${quest.icon}</div>
+                    <h2>${quest.title}</h2>
+                    <p>${quest.instruction}</p>
+                    <p class="brd-sidequest-meta">${quest.durationSec}s timer. Finish it and shave 12 points off the cooked meter.</p>
+                    <div class="brd-btn-row">
+                        <button class="brd-btn brd-btn-success" data-action="accept">Accept Quest</button>
+                        <button class="brd-btn brd-btn-primary" data-action="reroll">Reroll</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="skip">Not Now</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelector("[data-action='accept']")?.addEventListener("click", () => {
+            this.renderActiveSideQuest(quest);
+        });
+
+        wrapper.querySelector("[data-action='reroll']")?.addEventListener("click", () => {
+            this.renderSideQuestPrompt(this.pickSideQuest(quest.id), source);
+        });
+
+        wrapper.querySelector("[data-action='skip']")?.addEventListener("click", () => {
+            this.closeSideQuest("skip");
+        });
+    }
+
+    private renderActiveSideQuest(quest: SideQuestDefinition) {
+        const wrapper = showOverlay("sidequest", `
+            <div class="brd-fullscreen">
+                <div class="brd-card brd-sidequest-card">
+                    <div class="brd-sidequest-badge">Side Quest Active</div>
+                    <div class="brd-sidequest-icon">${quest.icon}</div>
+                    <h2>${quest.title}</h2>
+                    <p class="brd-sidequest-instruction">${quest.instruction}</p>
+                    <div class="brd-sidequest-countdown" data-role="countdown">${quest.durationSec}</div>
+                    <p class="brd-sidequest-meta">Done unlocks when the timer hits zero.</p>
+                    <div class="brd-btn-row">
+                        <button class="brd-btn brd-btn-success" data-action="done" disabled>Done</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="bail">Bail</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        const countdownEl = wrapper.querySelector<HTMLElement>("[data-role='countdown']");
+        const doneBtn = wrapper.querySelector<HTMLButtonElement>("[data-action='done']");
+        const startedAt = Date.now();
+
+        const interval = window.setInterval(() => {
+            const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+            const remaining = Math.max(0, quest.durationSec - elapsedSec);
+            if (countdownEl) {
+                countdownEl.textContent = String(remaining);
+            }
+            if (remaining === 0) {
+                clearInterval(interval);
+                if (doneBtn) {
+                    doneBtn.disabled = false;
+                }
+            }
+        }, 200);
+
+        doneBtn?.addEventListener("click", () => {
+            clearInterval(interval);
+            void this.completeSideQuest();
+        });
+
+        wrapper.querySelector("[data-action='bail']")?.addEventListener("click", () => {
+            clearInterval(interval);
+            this.closeSideQuest("bail");
+        });
+    }
+
+    private closeSideQuest(reason: "skip" | "bail" | "complete") {
+        if (!this.isSideQuestOpen()) return;
+        removeOverlay("sidequest");
+        const shouldReopenForcedChoice =
+            reason !== "complete" &&
+            this.reopenForcedChoiceAfterSideQuest &&
+            this.maxCookedChoiceLocked &&
+            isMaxCooked(this.session.cookedScore);
+        this.reopenForcedChoiceAfterSideQuest = false;
+        this.onSideQuestClosed();
+        if (shouldReopenForcedChoice) {
+            this.showLockedMaxCookedOverlay();
+        }
+    }
+
+    private async completeSideQuest() {
+        const now = Date.now();
+        const nextPromptAfterMs = now + this.settings.sideQuest.promptCooldownMinutes * 60_000;
+
+        this.session.cookedScore = Math.max(0, this.session.cookedScore - SIDE_QUEST_SCORE_RELIEF);
+        this.session.cookedStatus = deriveCookedStatus(this.session.cookedScore, this.settings.cooked.thresholds);
+        this.session.lastInterventionAt = now;
+        this.maxCookedShown = this.session.cookedScore >= 100;
+        this.clearForcedMaxCookedChoice();
+
+        this.closeSideQuest("complete");
+        this.updateCookedWidget(this.session.cookedScore, this.session.cookedStatus);
+
+        const settingsRes = await sendMessage({
+            type: "UPDATE_SETTINGS",
+            payload: {
+                sideQuest: {
+                    promptCooldownMinutes: this.settings.sideQuest.promptCooldownMinutes,
+                    nextPromptAfterMs,
+                },
+            },
+        });
+        if (settingsRes?.success) {
+            this.settings = settingsRes.data;
+        } else {
+            this.settings.sideQuest.nextPromptAfterMs = nextPromptAfterMs;
+        }
+
+        await sendMessage({ type: "UPDATE_SESSION", payload: { tabId: this.session.tabId, patch: this.session } });
+        await sendMessage({ type: "LOG_EVENT", payload: { eventType: "side_quest_completed" } });
+    }
+
+    private async maybeAutoPrompt(previousStatus: CookedStatus, newStatus: CookedStatus, now: number) {
+        if (previousStatus !== "Based" || newStatus !== "Medium Cooked") return;
+        if (!this.canOpenSideQuest("auto", now)) return;
+        await this.openSideQuest("auto");
+    }
+
+    private clearForcedMaxCookedChoice() {
+        this.builtDifferentDismissed = false;
+        this.maxCookedChoiceLocked = false;
+        this.reopenForcedChoiceAfterSideQuest = false;
+    }
+
+    private showLockedMaxCookedOverlay() {
+        removeOverlay("intervention");
+        this.onLockedMaxCookedOverlayOpened();
+        const wrapper = showOverlay("denied", `
+            <div class="brd-fullscreen">
+                <div class="brd-card">
+                    <h2 style="font-size:28px;text-align:center;color:#f87171;">You cannot keep doomscrolling man.</h2>
+                    <p style="text-align:center;">Score is still maxed. Pick something that actually breaks the loop.</p>
+                    <div class="brd-btn-row" style="justify-content:center;">
+                        <button class="brd-btn brd-btn-primary" data-action="pack">Start Pack</button>
+                        <button class="brd-btn brd-btn-success" data-action="grass">Touch Grass</button>
+                        <button class="brd-btn brd-btn-ghost" data-action="sidequest">Side Quest</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        wrapper.querySelector("[data-action='pack']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.onLockedMaxCookedOverlayClosed();
+            void this.startPack("items", 10);
+        });
+
+        wrapper.querySelector("[data-action='grass']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.onLockedMaxCookedOverlayClosed();
+            void this.startTouchGrass(this.settings.touchGrass.defaultMinutes);
+        });
+
+        wrapper.querySelector("[data-action='sidequest']")?.addEventListener("click", () => {
+            removeOverlay("denied");
+            this.onLockedMaxCookedOverlayClosed();
+            void this.openSideQuest("manual", { returnToForcedChoice: true });
+        });
     }
 
     private pruneVelocitySamples(now: number = Date.now()) {

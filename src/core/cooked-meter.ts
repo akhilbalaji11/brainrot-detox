@@ -1,17 +1,17 @@
-import { COOKED_LABELS, DEFAULT_THRESHOLDS, EMA_ALPHA, IDLE_DECAY_THRESHOLD_MS } from "./constants";
-import type { CookedStatus, CookedThresholds, VibeIntent } from "./types";
+import {
+    COOKED_LABELS,
+    DEFAULT_THRESHOLDS,
+    EMA_ALPHA,
+    IDLE_DECAY_THRESHOLD_MS,
+    SHORT_FORM_DECAY_THRESHOLD_MS,
+} from "./constants";
+import type { CookedStatus, CookedThresholds } from "./types";
 
 export const TIKTOK_WATCH_SCORE_PER_SECOND = 1 / 30;
 export const TIKTOK_SWIPE_SCORE = 1;
 
 function clampCookedScore(score: number): number {
     return Math.max(0, Math.min(100, score));
-}
-
-function getShortFormDecayThreshold(vibeIntent: VibeIntent): number {
-    return vibeIntent === "Chill" || vibeIntent === "Laugh" ? 15_000 :
-        vibeIntent === "Learn" || vibeIntent === "JustHere" ? 25_000 :
-            20_000;
 }
 
 export function computeInstantScore(
@@ -32,18 +32,10 @@ export function computeRollingScore(
     previousScore: number,
     instantScore: number,
     hasNewSignals: boolean,
-    idleMs: number,
-    vibeIntent: VibeIntent
+    idleMs: number
 ): number {
-    const intentMultiplier =
-        vibeIntent === "Learn" ? 1.3 :
-            vibeIntent === "JustHere" ? 1.1 :
-                vibeIntent === "Laugh" ? 0.8 :
-                    vibeIntent === "Chill" ? 0.7 : 1.0;
-
     if (hasNewSignals) {
-        const adjusted = instantScore * intentMultiplier;
-        const smoothed = previousScore * (1 - EMA_ALPHA) + adjusted * EMA_ALPHA;
+        const smoothed = previousScore * (1 - EMA_ALPHA) + instantScore * EMA_ALPHA;
         return clampCookedScore(smoothed);
     }
 
@@ -55,15 +47,13 @@ export function computeRollingScore(
 export function computeShortsCookedScore(
     previousScore: number,
     signalGain: number,
-    vibeIntent: VibeIntent,
     idleMs: number
 ): number {
     if (signalGain > 0) {
         return clampCookedScore(previousScore + signalGain);
     }
 
-    const decayThreshold = getShortFormDecayThreshold(vibeIntent);
-    if (idleMs < decayThreshold) return previousScore;
+    if (idleMs < SHORT_FORM_DECAY_THRESHOLD_MS) return previousScore;
     if (idleMs < 60_000) return clampCookedScore(previousScore - 1);
     return clampCookedScore(previousScore - 3);
 }
@@ -101,15 +91,13 @@ export function isMaxCooked(score: number): boolean {
 export function computeTikTokCookedScore(
     previousScore: number,
     signalGain: number,
-    vibeIntent: VibeIntent,
     idleMs: number
 ): number {
     if (signalGain > 0) {
         return clampCookedScore(previousScore + signalGain);
     }
 
-    const decayThreshold = getShortFormDecayThreshold(vibeIntent);
-    if (idleMs < decayThreshold) return previousScore;
+    if (idleMs < SHORT_FORM_DECAY_THRESHOLD_MS) return previousScore;
     if (idleMs < 60_000) return clampCookedScore(previousScore - 1);
     return clampCookedScore(previousScore - 3);
 }
@@ -117,15 +105,13 @@ export function computeTikTokCookedScore(
 export function computeReelsCookedScore(
     previousScore: number,
     signalGain: number,
-    vibeIntent: VibeIntent,
     idleMs: number
 ): number {
     if (signalGain > 0) {
         return clampCookedScore(previousScore + signalGain);
     }
 
-    const decayThreshold = getShortFormDecayThreshold(vibeIntent);
-    if (idleMs < decayThreshold) return previousScore;
+    if (idleMs < SHORT_FORM_DECAY_THRESHOLD_MS) return previousScore;
     if (idleMs < 60_000) return clampCookedScore(previousScore - 1);
     return clampCookedScore(previousScore - 3);
 }

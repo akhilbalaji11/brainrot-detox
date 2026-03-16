@@ -13,7 +13,7 @@ async function init() {
     document.getElementById("statPacks")!.textContent = String(stats.totalPacksCompleted);
     document.getElementById("statGrass")!.textContent = String(stats.totalTouchGrassSessions);
     document.getElementById("statInterventions")!.textContent = String(stats.totalInterventions);
-    document.getElementById("statVibes")!.textContent = String(stats.totalVibeChecks);
+    document.getElementById("statSideQuests")!.textContent = String(stats.totalSideQuestsCompleted);
     document.getElementById("statBypasses")!.textContent = String(stats.totalBypassCount);
 
     // Share card

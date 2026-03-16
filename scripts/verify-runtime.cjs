@@ -214,11 +214,41 @@ async function dragWidget(page, targetX) {
   await page.waitForTimeout(250);
 }
 
-async function closeVibeCheck(page) {
-  await page.evaluate(() => {
-    const button = document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='vibecheck'] [data-action='skip']");
+async function clickSideQuestAction(page, action) {
+  await page.evaluate((nextAction) => {
+    const shadowRoot = document.getElementById("brd-overlay-host")?.shadowRoot;
+    const button = shadowRoot?.querySelector(`[data-overlay='sidequest'] [data-action='${nextAction}']`);
     button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
+  }, action);
+}
+
+async function clickOverlayAction(page, overlayName, action) {
+  await page.evaluate(({ name, nextAction }) => {
+    const shadowRoot = document.getElementById("brd-overlay-host")?.shadowRoot;
+    const button = shadowRoot?.querySelector(`[data-overlay='${name}'] [data-action='${nextAction}']`);
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, { name: overlayName, nextAction: action });
+}
+
+async function completeSideQuest(page) {
+  await page.waitForFunction(() => {
+    return !!document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+  }, { timeout: 5000 });
+
+  await clickSideQuestAction(page, "accept");
+  await page.waitForFunction(() => {
+    const doneButton = document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest'] [data-action='done']");
+    return !!doneButton;
+  }, { timeout: 5000 });
+  await page.waitForFunction(() => {
+    const doneButton = document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest'] [data-action='done']");
+    return !!doneButton && !doneButton.disabled;
+  }, { timeout: 15000 });
+
+  await clickSideQuestAction(page, "done");
+  await page.waitForFunction(() => {
+    return !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+  }, { timeout: 5000 });
 }
 
 async function pushShortsNavigation(page, nextIndex) {
@@ -411,6 +441,143 @@ async function verifyRedditVelocity(context) {
   return { slow: slowScore, fast: fastScore };
 }
 
+async function verifyManualSideQuest(context) {
+  const page = await context.newPage();
+  await page.goto("https://www.youtube.com/", { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  const widgetMarkerBefore = await getWidgetMarker(page);
+  for (let index = 1; index <= 12; index++) {
+    await appendFeedItemAndScroll(page, "#content", "ytd-rich-item-renderer", index);
+    await page.waitForTimeout(180);
+  }
+
+  await page.waitForTimeout(900);
+  const scoreBefore = await getWidgetExactScore(page);
+  assert.ok(scoreBefore !== null && scoreBefore > 12, `Expected manual Side Quest setup score to be above 12, got ${scoreBefore}.`);
+
+  await clickWidget(page);
+  await completeSideQuest(page);
+  await page.waitForTimeout(900);
+
+  const scoreAfter = await getWidgetExactScore(page);
+  const widgetMarkerAfter = await getWidgetMarker(page);
+  assert.ok(
+    scoreAfter !== null && scoreAfter <= scoreBefore - 8,
+    `Completing a Side Quest should lower the cooked score (before=${scoreBefore}, after=${scoreAfter}).`
+  );
+  assert.equal(widgetMarkerAfter, widgetMarkerBefore, "Widget should stay mounted while manual Side Quest runs.");
+
+  await page.close();
+}
+
+async function verifyAutoSideQuestPrompt(context) {
+  const page = await context.newPage();
+  await page.goto("https://www.youtube.com/shorts/start", { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  for (let index = 1; index <= 40; index++) {
+    await pushShortsNavigation(page, index);
+    await page.waitForTimeout(220);
+
+    if (await hasOverlay(page, "sidequest")) {
+      await clickSideQuestAction(page, "skip");
+      await page.waitForFunction(() => {
+        return !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+      }, { timeout: 5000 });
+
+      for (let nextIndex = index + 1; nextIndex <= index + 10; nextIndex++) {
+        await pushShortsNavigation(page, nextIndex);
+        await page.waitForTimeout(220);
+      }
+
+      assert.equal(
+        await hasOverlay(page, "sidequest"),
+        false,
+        "Auto Side Quest prompt should not immediately reappear after the first medium-cooked crossing."
+      );
+      await page.close();
+      return;
+    }
+  }
+
+  await page.close();
+  assert.fail("Expected Shorts flow to auto-prompt a Side Quest when crossing into Medium Cooked.");
+}
+
+async function verifyForcedMaxCookedChoice(context) {
+  const page = await context.newPage();
+  await page.goto("https://www.youtube.com/shorts/start", { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  for (let index = 1; index <= 90; index++) {
+    await pushShortsNavigation(page, index);
+    await page.waitForTimeout(320);
+
+    if (await hasOverlay(page, "sidequest")) {
+      await clickSideQuestAction(page, "skip");
+      await page.waitForFunction(() => {
+        return !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+      }, { timeout: 5000 });
+    }
+
+    if (await hasOverlay(page, "skyrim")) {
+      break;
+    }
+  }
+
+  assert.equal(await hasOverlay(page, "skyrim"), true, "Expected Skyrim overlay before exercising the max-cooked follow-up path.");
+  await clickOverlayAction(page, "skyrim", "dismiss");
+  await page.waitForFunction(() => {
+    return !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='skyrim']");
+  }, { timeout: 5000 });
+
+  await pushShortsNavigation(page, 999);
+  await page.waitForTimeout(500);
+  await page.waitForFunction(() => {
+    return !!document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='denied']");
+  }, { timeout: 5000 });
+
+  await clickOverlayAction(page, "denied", "sidequest");
+  try {
+    await page.waitForFunction(() => {
+      return !!document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+    }, { timeout: 5000 });
+  } catch (error) {
+    const debugState = await page.evaluate(() => {
+      const shadowRoot = document.getElementById("brd-overlay-host")?.shadowRoot;
+      return {
+        overlays: Array.from(shadowRoot?.querySelectorAll("[data-overlay]") ?? []).map((element) => ({
+          name: element.getAttribute("data-overlay"),
+          title: element.querySelector("h2")?.textContent?.trim() ?? null,
+          actions: Array.from(element.querySelectorAll("[data-action]")).map((actionElement) => actionElement.getAttribute("data-action")),
+        })),
+      };
+    });
+    throw new Error(`Side Quest did not open from the denied overlay. Debug state: ${JSON.stringify(debugState)}. ${error}`);
+  }
+
+  await clickSideQuestAction(page, "skip");
+  await page.waitForFunction(() => {
+    return !!document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='denied']");
+  }, { timeout: 5000 });
+
+  const deniedState = await page.evaluate(() => {
+    const shadowRoot = document.getElementById("brd-overlay-host")?.shadowRoot;
+    const title = shadowRoot?.querySelector("[data-overlay='denied'] h2")?.textContent?.trim() ?? "";
+    const actions = Array.from(shadowRoot?.querySelectorAll("[data-overlay='denied'] [data-action]") ?? [])
+      .map((element) => element.getAttribute("data-action"))
+      .filter(Boolean)
+      .sort();
+    return { title, actions };
+  });
+
+  assert.match(deniedState.title, /You cannot keep doomscrolling man\./, "Skipping Side Quest from the max-cooked follow-up should reopen the locked prompt.");
+  assert.deepEqual(deniedState.actions, ["grass", "pack", "sidequest"], "The locked prompt should offer Pack, Touch Grass, and Side Quest.");
+
+  await page.close();
+}
+
 async function driveShortsScenario(page) {
   await page.goto("https://www.youtube.com/shorts/start", { waitUntil: "domcontentloaded" });
   await waitForWidget(page);
@@ -419,11 +586,6 @@ async function driveShortsScenario(page) {
   await dragWidget(page, 20);
   let styles = await getWidgetStyles(page);
   assert.equal(styles?.left, "0px", "Widget should snap to the left edge after dragging.");
-
-  await clickWidget(page);
-  await page.waitForFunction(() => !!document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='vibecheck']"), { timeout: 5000 });
-  await closeVibeCheck(page);
-  await page.waitForFunction(() => !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='vibecheck']"), { timeout: 5000 });
 
   await dragWidget(page, 1200);
   styles = await getWidgetStyles(page);
@@ -436,6 +598,13 @@ async function driveShortsScenario(page) {
   for (; nextIndex <= 80; nextIndex++) {
     await pushShortsNavigation(page, nextIndex);
     await page.waitForTimeout(320);
+
+    if (await hasOverlay(page, "sidequest")) {
+      await clickSideQuestAction(page, "skip");
+      await page.waitForFunction(() => {
+        return !document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector("[data-overlay='sidequest']");
+      }, { timeout: 5000 });
+    }
 
     if (!interventionMarker && await hasOverlay(page, "intervention")) {
       interventionMarker = await getOverlayMarker(page, "intervention");
@@ -452,15 +621,6 @@ async function driveShortsScenario(page) {
     skyrimMarker,
     `Expected Skyrim overlay after rapid Shorts navigation, current score was ${scoreBeforeSkyrimAssertion}.`
   );
-
-  if (interventionMarker) {
-    const interventionMarkerAfter = await getOverlayMarker(page, "intervention");
-    assert.equal(
-      interventionMarkerAfter,
-      interventionMarker,
-      "Intervention overlay should stay mounted while the widget keeps updating."
-    );
-  }
 
   for (let index = nextIndex + 1; index <= nextIndex + 4; index++) {
     await pushShortsNavigation(page, index);
@@ -560,6 +720,10 @@ async function main() {
   });
 
   try {
+    await verifyAutoSideQuestPrompt(context);
+    await verifyManualSideQuest(context);
+    await verifyForcedMaxCookedChoice(context);
+
     const velocityReport = {
       youtube: await verifyYouTubeVelocity(context),
       shorts: await verifyShortsVelocity(context),

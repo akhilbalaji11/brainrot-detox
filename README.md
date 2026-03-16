@@ -27,7 +27,7 @@ Brainrot Detox is a Chrome extension that watches how aggressively you scroll on
 
 - The extension builds successfully and loads as an unpacked Manifest v3 Chrome extension.
 - The cooked meter widget now updates in place instead of remounting on each tick.
-- Intervention overlays such as "Absolutely Cooked", Skyrim/max-cooked, vibe check, snack packs, and touch grass no longer get reset by widget refreshes.
+- Intervention overlays such as "Absolutely Cooked", Skyrim/max-cooked, Side Quest, snack packs, and touch grass no longer get reset by widget refreshes.
 - Short-form velocity scoring now uses recent successful navigation history so rapid scrolling increases score faster than slow scrolling.
 - The widget can be dragged vertically and snapped to either the left or right edge, and that position is persisted per site.
 - Instagram Reels and TikTok content scripts keep a single adapter alive across supported in-app route changes instead of tearing everything down on every SPA navigation.
@@ -39,7 +39,7 @@ Brainrot Detox is a Chrome extension that watches how aggressively you scroll on
 - `Cooked Meter`: shows the current scroll state as `Based`, `Medium Cooked`, or `Absolutely Cooked`.
 - `Snack Packs`: short item-count or time-based goals to break scrolling momentum.
 - `Touch Grass Mode`: temporarily blocks the feed with a cooldown screen and reset prompts.
-- `Vibe Check`: lets the user set intent so the extension can be stricter or more forgiving.
+- `Side Quest`: offers quick playful break missions that lower the cooked meter after a short reset.
 - `Stats Dashboard`: tracks interventions, pack completions, and progress over time.
 
 ## Changelog
@@ -54,6 +54,14 @@ Brainrot Detox is a Chrome extension that watches how aggressively you scroll on
 - Restored draggable edge snapping for the widget with click-vs-drag separation and persisted left/right placement.
 - Stabilized Instagram Reels and TikTok SPA handling so adapters survive supported in-feed route changes.
 - Added `scripts/verify-runtime.cjs` to load the built extension in a real browser and verify widget persistence, overlay stability, scoring behavior, and drag behavior across all supported platforms.
+
+### v1.2.0 - Side Quest Refresh
+
+- Removed the old Vibe Check intent system and simplified cooked-meter scoring back to a neutral baseline.
+- Added Side Quest, a shared lightweight overlay with timed break missions, rerolls, cooldown-aware auto prompts, and a completion reward that lowers cooked score.
+- Rewired the widget click target, popup quick action, options toggle, and dashboard stat from Vibe Check to Side Quest.
+- Added storage compatibility so older installs seed the new Side Quest cooldown from legacy Vibe Check settings without crashing or corrupting saved sessions.
+- Updated runtime behavior so automatic Side Quest prompts only appear when a session crosses from Based into Medium Cooked and no stronger overlay is already active.
 
 ## Tech Stack
 

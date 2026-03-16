@@ -12,7 +12,7 @@ const siteName = document.getElementById("siteName")!;
 const siteToggle = document.getElementById("siteToggle") as HTMLInputElement;
 const btnPack = document.getElementById("btnPack")!;
 const btnGrass = document.getElementById("btnGrass")!;
-const btnVibe = document.getElementById("btnVibe")!;
+const btnSideQuest = document.getElementById("btnSideQuest")!;
 const btnTheme = document.getElementById("btnTheme")!;
 const packMenu = document.getElementById("packMenu")!;
 const linkOptions = document.getElementById("linkOptions")!;
@@ -158,10 +158,10 @@ function setupListeners() {
         window.close();
     });
 
-    // Vibe Check
-    btnVibe.addEventListener("click", async () => {
+    // Side Quest
+    btnSideQuest.addEventListener("click", async () => {
         if (currentTabId) {
-            await chrome.tabs.sendMessage(currentTabId, { type: "TRIGGER_VIBE_CHECK" });
+            await chrome.tabs.sendMessage(currentTabId, { type: "TRIGGER_SIDE_QUEST" });
         }
         window.close();
     });
