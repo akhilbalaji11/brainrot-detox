@@ -159,6 +159,9 @@ function patchWidgetOverlay(overlay: HTMLElement, state: WidgetOverlayState) {
   const widget = overlay.querySelector(".brd-widget") as HTMLElement | null;
   if (!widget) return;
 
+  widget.dataset.score = state.score.toFixed(3);
+  widget.dataset.status = state.status;
+
   const label = getCookedLabel(state.status as CookedStatus);
   const scoreClass = state.status === "Based" ? "brd-score-based" :
     state.status === "Medium Cooked" ? "brd-score-medium" : "brd-score-cooked";

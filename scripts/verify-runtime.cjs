@@ -40,6 +40,27 @@ function getShortsHtml() {
   </html>`;
 }
 
+function getYouTubeFeedHtml() {
+  const items = Array.from({ length: 12 }, (_, index) => (
+    `<ytd-rich-item-renderer data-seed="${index}" style="display:block;height:240px;border-radius:16px;background:#222;margin:0 0 16px;"></ytd-rich-item-renderer>`
+  )).join("");
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>YouTube Feed Harness</title>
+      <style>
+        html, body { margin: 0; min-height: 100%; background: #111; color: #fff; font-family: sans-serif; }
+        #content { padding: 24px; }
+      </style>
+    </head>
+    <body>
+      <div id="content">${items}</div>
+    </body>
+  </html>`;
+}
+
 function getTikTokHtml() {
   return `<!doctype html>
   <html>
@@ -55,6 +76,29 @@ function getTikTokHtml() {
     <body>
       <div class="tiktok-web-player">
         <video muted autoplay playsinline poster="poster-0"></video>
+      </div>
+    </body>
+  </html>`;
+}
+
+function getRedditHtml() {
+  const posts = Array.from({ length: 12 }, (_, index) => (
+    `<article data-seed="${index}" style="display:block;height:220px;border-radius:16px;background:#222;margin:0 0 16px;"></article>`
+  )).join("");
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Reddit Harness</title>
+      <style>
+        html, body { margin: 0; min-height: 100%; background: #111; color: #fff; font-family: sans-serif; }
+        [data-testid="posts-list"] { padding: 24px; }
+      </style>
+    </head>
+    <body>
+      <div id="main-content">
+        <div data-testid="posts-list">${posts}</div>
       </div>
     </body>
   </html>`;
@@ -136,6 +180,13 @@ async function getWidgetScore(page) {
   });
 }
 
+async function getWidgetExactScore(page) {
+  return page.evaluate(() => {
+    const widget = document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector(".brd-widget");
+    return widget ? Number(widget.getAttribute("data-score") || "0") : null;
+  });
+}
+
 async function clickWidget(page) {
   const box = await page.evaluate(() => {
     const widget = document.getElementById("brd-overlay-host")?.shadowRoot?.querySelector(".brd-widget");
@@ -177,6 +228,26 @@ async function pushShortsNavigation(page, nextIndex) {
   }, nextIndex);
 }
 
+async function appendFeedItemAndScroll(page, containerSelector, tagName, nextIndex) {
+  await page.evaluate(({ selector, tag, index }) => {
+    const container = document.querySelector(selector);
+    if (!container) return;
+
+    const item = document.createElement(tag);
+    item.setAttribute("data-runtime-index", String(index));
+    item.textContent = `item-${index}`;
+    item.style.display = "block";
+    item.style.height = "240px";
+    item.style.marginBottom = "16px";
+    item.style.borderRadius = "16px";
+    item.style.background = "#333";
+    container.appendChild(item);
+
+    window.scrollTo(0, index * 180);
+    window.dispatchEvent(new Event("scroll"));
+  }, { selector: containerSelector, tag: tagName, index: nextIndex });
+}
+
 async function measureShortsVelocity(page, delayMs, navigationCount = 20) {
   await page.goto("https://www.youtube.com/shorts/start", { waitUntil: "domcontentloaded" });
   await waitForWidget(page);
@@ -187,7 +258,7 @@ async function measureShortsVelocity(page, delayMs, navigationCount = 20) {
   }
 
   await page.waitForTimeout(800);
-  const score = await getWidgetScore(page);
+  const score = await getWidgetExactScore(page);
   assert.ok(score !== null, "Expected Shorts widget score to be readable.");
   return score;
 }
@@ -205,6 +276,139 @@ async function verifyShortsVelocity(context) {
     fastScore > slowScore + 6,
     `Rapid Shorts navigation should score materially higher than slow navigation (slow=${slowScore}, fast=${fastScore}).`
   );
+
+  return { slow: slowScore, fast: fastScore };
+}
+
+async function measureInstagramVelocity(page, delayMs, navigationCount = 20) {
+  await page.goto("https://www.instagram.com/reel/start", { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  for (let index = 1; index <= navigationCount; index++) {
+    await page.evaluate((nextIndex) => {
+      history.pushState({}, "", `/reel/${nextIndex}`);
+      document.body.appendChild(document.createElement("div"));
+    }, index);
+    await page.waitForTimeout(delayMs);
+  }
+
+  await page.waitForTimeout(800);
+  const score = await getWidgetExactScore(page);
+  assert.ok(score !== null, "Expected Instagram widget score to be readable.");
+  return score;
+}
+
+async function verifyInstagramVelocity(context) {
+  const slowPage = await context.newPage();
+  const slowScore = await measureInstagramVelocity(slowPage, 900);
+  await slowPage.close();
+
+  const fastPage = await context.newPage();
+  const fastScore = await measureInstagramVelocity(fastPage, 160);
+  await fastPage.close();
+
+  assert.ok(
+    fastScore > slowScore + 6,
+    `Rapid Instagram reel changes should score materially higher than slow changes (slow=${slowScore}, fast=${fastScore}).`
+  );
+
+  return { slow: slowScore, fast: fastScore };
+}
+
+async function measureTikTokVelocity(page, delayMs, navigationCount = 16) {
+  await page.goto("https://www.tiktok.com/", { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  for (let index = 1; index <= navigationCount; index++) {
+    await page.evaluate((nextIndex) => {
+      const container = document.querySelector(".tiktok-web-player");
+      if (!container) return;
+
+      const video = document.createElement("video");
+      video.muted = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.poster = `velocity-${nextIndex}`;
+      video.style.width = "400px";
+      video.style.height = "700px";
+      video.style.display = "block";
+      video.style.margin = "0 auto";
+      container.replaceChildren(video);
+      document.body.appendChild(document.createElement("div"));
+    }, index);
+    await page.waitForTimeout(delayMs);
+  }
+
+  await page.waitForTimeout(800);
+  const score = await getWidgetExactScore(page);
+  assert.ok(score !== null, "Expected TikTok widget score to be readable.");
+  return score;
+}
+
+async function verifyTikTokVelocity(context) {
+  const slowPage = await context.newPage();
+  const slowScore = await measureTikTokVelocity(slowPage, 650);
+  await slowPage.close();
+
+  const fastPage = await context.newPage();
+  const fastScore = await measureTikTokVelocity(fastPage, 140);
+  await fastPage.close();
+
+  assert.ok(
+    fastScore > slowScore + 4,
+    `Rapid TikTok navigation should score higher than slow navigation (slow=${slowScore}, fast=${fastScore}).`
+  );
+
+  return { slow: slowScore, fast: fastScore };
+}
+
+async function measureFeedVelocity(page, url, containerSelector, tagName, delayMs, stepCount = 20) {
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await waitForWidget(page);
+
+  for (let index = 1; index <= stepCount; index++) {
+    await appendFeedItemAndScroll(page, containerSelector, tagName, index);
+    await page.waitForTimeout(delayMs);
+  }
+
+  await page.waitForTimeout(1000);
+  const score = await getWidgetExactScore(page);
+  assert.ok(score !== null, `Expected widget score to be readable for ${url}.`);
+  return score;
+}
+
+async function verifyYouTubeVelocity(context) {
+  const slowPage = await context.newPage();
+  const slowScore = await measureFeedVelocity(slowPage, "https://www.youtube.com/", "#content", "ytd-rich-item-renderer", 800);
+  await slowPage.close();
+
+  const fastPage = await context.newPage();
+  const fastScore = await measureFeedVelocity(fastPage, "https://www.youtube.com/", "#content", "ytd-rich-item-renderer", 140);
+  await fastPage.close();
+
+  assert.ok(
+    fastScore > slowScore + 1.5,
+    `Rapid YouTube scrolling should score higher than slow scrolling (slow=${slowScore}, fast=${fastScore}).`
+  );
+
+  return { slow: slowScore, fast: fastScore };
+}
+
+async function verifyRedditVelocity(context) {
+  const slowPage = await context.newPage();
+  const slowScore = await measureFeedVelocity(slowPage, "https://www.reddit.com/", "[data-testid='posts-list']", "article", 800);
+  await slowPage.close();
+
+  const fastPage = await context.newPage();
+  const fastScore = await measureFeedVelocity(fastPage, "https://www.reddit.com/", "[data-testid='posts-list']", "article", 140);
+  await fastPage.close();
+
+  assert.ok(
+    fastScore > slowScore + 1.5,
+    `Rapid Reddit scrolling should score higher than slow scrolling (slow=${slowScore}, fast=${fastScore}).`
+  );
+
+  return { slow: slowScore, fast: fastScore };
 }
 
 async function driveShortsScenario(page) {
@@ -340,8 +544,10 @@ async function main() {
     ],
   });
 
-  await context.route("https://www.youtube.com/shorts/*", async (route) => {
-    await route.fulfill({ status: 200, contentType: "text/html", body: getShortsHtml() });
+  await context.route("https://www.youtube.com/*", async (route) => {
+    const url = new URL(route.request().url());
+    const body = url.pathname.startsWith("/shorts/") ? getShortsHtml() : getYouTubeFeedHtml();
+    await route.fulfill({ status: 200, contentType: "text/html", body });
   });
   await context.route("https://www.tiktok.com/*", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/html", body: getTikTokHtml() });
@@ -349,9 +555,18 @@ async function main() {
   await context.route("https://www.instagram.com/*", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/html", body: getInstagramHtml() });
   });
+  await context.route("https://www.reddit.com/*", async (route) => {
+    await route.fulfill({ status: 200, contentType: "text/html", body: getRedditHtml() });
+  });
 
   try {
-    await verifyShortsVelocity(context);
+    const velocityReport = {
+      youtube: await verifyYouTubeVelocity(context),
+      shorts: await verifyShortsVelocity(context),
+      reddit: await verifyRedditVelocity(context),
+      instagram: await verifyInstagramVelocity(context),
+      tiktok: await verifyTikTokVelocity(context),
+    };
 
     const page = await context.newPage();
     await driveShortsScenario(page);
@@ -364,6 +579,7 @@ async function main() {
     const instagramPage = await context.newPage();
     await driveInstagramScenario(instagramPage);
     await instagramPage.close();
+    console.log("Velocity report:", JSON.stringify(velocityReport, null, 2));
     console.log("Runtime verification passed.");
   } finally {
     await context.close();

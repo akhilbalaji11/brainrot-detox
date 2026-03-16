@@ -48,6 +48,7 @@ export class RedditAdapter extends BaseAdapter {
 
         const observeFeed = () => {
             const feed = document.querySelector("#main-content, [data-testid='posts-list'], .ListingLayout-outerContainer") || document.body;
+            this.lastSeenItems = document.querySelectorAll("shreddit-post, [data-testid='post-container'], .Post, article").length;
             this.registerMutationObserver(feed, { childList: true, subtree: true }, () => {
                 const items = document.querySelectorAll("shreddit-post, [data-testid='post-container'], .Post, article");
                 if (items.length > this.lastSeenItems) {

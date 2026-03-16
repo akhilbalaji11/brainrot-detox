@@ -48,6 +48,7 @@ export class YouTubeAdapter extends BaseAdapter {
 
         const observeFeed = () => {
             const feed = document.querySelector("ytd-browse, ytd-search, ytd-watch-flexy, #content") || document.body;
+            this.lastSeenItems = document.querySelectorAll("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer").length;
             this.registerMutationObserver(feed, { childList: true, subtree: true }, () => {
                 const items = document.querySelectorAll("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer");
                 if (items.length > this.lastSeenItems) {
@@ -64,7 +65,7 @@ export class YouTubeAdapter extends BaseAdapter {
         }
 
         this.registerEventListener(window, "yt-navigate-finish", () => {
-            this.lastSeenItems = 0;
+            this.lastSeenItems = document.querySelectorAll("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer").length;
         });
 
         this.registerRuntimeMessageListener(this.handleRuntimeMessage);
